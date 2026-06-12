@@ -218,3 +218,26 @@ async def submit_audit(request: AuditRequest) -> Dict[str, str]:
 async def get_audit_log(limit: int = 50) -> List[Dict[str, Any]]:
     """Retrieve the most recent audit log entries."""
     return read_audit_entries(limit=min(limit, 500))
+
+
+# ── Articles (Compliance Database) ────────────────────────────────────────────
+
+@router.get("/articles", tags=["system"])
+async def list_articles(
+    limit: int = 30,
+    offset: int = 0,
+    entity: str = "",
+    severity: str = "",
+) -> List[Dict[str, Any]]:
+    """Return paginated articles from the pre-compiled dataset (Compliance Database)."""
+    if not media_retrieval_agent.is_initialized:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Agent not yet initialised.",
+        )
+    arts = media_retrieval_agent.articles
+    if entity:
+        arts = [a for a in arts if entity.lower() in a.get("entity_name", "").lower()]
+    if severity:
+        arts = [a for a in arts if a.get("severity_label", "").lower() == severity.lower()]
+    return arts[offset: offset + limit]
