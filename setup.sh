@@ -9,8 +9,6 @@ echo ""
 # 1. Backend Setup
 echo "[1/3] Setting up Python backend..."
 cd backend
-python3 -m venv venv
-source venv/bin/activate
 pip install --upgrade pip
 
 # Note: The requirements.txt assumes a standard torch install,
@@ -25,7 +23,6 @@ pip install -r requirements.txt
 echo "Generating synthetic dataset..."
 python -m app.data.generate_dataset
 
-deactivate
 cd ..
 
 # 2. Frontend Setup
@@ -37,7 +34,7 @@ cd ..
 echo "[3/3] Setup complete!"
 echo ""
 echo "To run the application:"
-echo "Terminal 1 (Backend):  cd backend && source venv/bin/activate && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
+echo "Terminal 1 (Backend):  cd backend && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
 echo "Terminal 2 (Frontend): cd frontend && npm run dev"
 echo ""
 echo "The UI will be available at http://localhost:8501"

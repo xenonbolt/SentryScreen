@@ -30,24 +30,27 @@ The system uses a 6-agent pipeline:
    - Set `OLLAMA_ENABLED=true` if you have a local Ollama instance running.
    - Adjust scoring weights or match thresholds.
 
-## Running the Application
+## 🚀 How to Run the App
 
-You need two terminals to run the backend and frontend concurrently.
+After completing the **Setup & Installation** above, you need to run both the backend API and the frontend UI. 
 
-**Terminal 1: FastAPI Backend**
+You will need **two separate terminals**.
+
+### Step 1: Start the FastAPI Backend
+Open your first terminal, navigate to the project root, and run:
 ```bash
 cd backend
-source venv/bin/activate
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
+*The backend API will be available at http://localhost:8000*
 
-**Terminal 2: React Frontend**
+### Step 2: Start the React Frontend
+Open your second terminal, navigate to the project root, and run:
 ```bash
 cd frontend
 npm run dev
 ```
-
-The frontend will be accessible at: **http://localhost:8501** (or whichever port Vite maps it to if 8501 is busy).
+*The frontend UI will be accessible at **http://localhost:8501***
 
 ## Usage
 1. Enter an entity name (e.g., `Nexum Capital Partners`, `Viktor Dragan`, `Clean Corp`).
