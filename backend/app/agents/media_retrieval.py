@@ -213,11 +213,7 @@ class MediaRetrievalAgent:
 
         # Broad news query + targeted adverse query
         news_query    = query_name
-        adverse_query = (
-            f'"{query_name}" '
-            f'(fraud OR scandal OR sanction OR fine OR lawsuit OR '
-            f'investigation OR corruption OR arrest OR indictment OR controversy)'
-        )
+        adverse_query = f'"{query_name}"'
         logger.info(f"[MediaRetrieval] Live news fetch for: '{query_name}'")
 
         raw_articles: List[Dict[str, Any]] = []

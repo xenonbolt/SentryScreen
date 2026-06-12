@@ -34,13 +34,13 @@ html, body,
     color: #e2e8f0 !important;
 }
 
-/* Radial ambient glow - subtle red */
+/* Radial ambient glow - subtle red + a hint of green */
 [data-testid="stMain"]::before {
     content: '';
     position: fixed; inset: 0; pointer-events: none; z-index: 0;
     background:
-        radial-gradient(ellipse at 15% 50%, rgba(229,56,59,0.05) 0%, transparent 45%),
-        radial-gradient(ellipse at 85% 10%, rgba(186,24,38,0.04) 0%, transparent 40%),
+        radial-gradient(ellipse at 15% 50%, rgba(229,56,59,0.06) 0%, transparent 45%),
+        radial-gradient(ellipse at 85% 10%, rgba(34,197,94,0.03) 0%, transparent 40%),
         radial-gradient(ellipse at 50% 90%, rgba(229,56,59,0.03) 0%, transparent 50%);
 }
 
@@ -210,6 +210,18 @@ hr { border-color: rgba(229,56,59,0.15) !important; }
     padding-bottom: 0.5rem;
     border-bottom: 1px solid rgba(229,56,59,0.2);
 }
+/* A green accented card title */
+.ss-card-title-green {
+    font-family: 'Fira Code', monospace;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #22c55e;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid rgba(34, 197, 94, 0.2);
+}
 
 /* ── Badges ── */
 .badge {
@@ -225,11 +237,11 @@ hr { border-color: rgba(229,56,59,0.15) !important; }
 .badge-CRITICAL { background:rgba(220,38,38,0.2);  color:#f87171; border:1px solid rgba(220,38,38,0.5); }
 .badge-HIGH     { background:rgba(239,68,68,0.15); color:#fca5a5; border:1px solid rgba(239,68,68,0.4); }
 .badge-MEDIUM   { background:rgba(245,158,11,0.15);color:#fcd34d; border:1px solid rgba(245,158,11,0.4); }
-.badge-LOW      { background:rgba(16,185,129,0.15);color:#6ee7b7; border:1px solid rgba(16,185,129,0.4); }
+.badge-LOW      { background:rgba(34,197,94,0.15); color:#4ade80; border:1px solid rgba(34,197,94,0.4); }
 
 .cat-HIGH   { background:rgba(220,38,38,0.2);  color:#f87171; border:1px solid rgba(220,38,38,0.5); }
 .cat-MEDIUM { background:rgba(245,158,11,0.15);color:#fcd34d; border:1px solid rgba(245,158,11,0.4); }
-.cat-LOW    { background:rgba(16,185,129,0.15);color:#6ee7b7; border:1px solid rgba(16,185,129,0.4); }
+.cat-LOW    { background:rgba(34,197,94,0.15); color:#4ade80; border:1px solid rgba(34,197,94,0.4); }
 
 .alias-tag, .kw-tag {
     display:inline-block;
@@ -249,7 +261,7 @@ hr { border-color: rgba(229,56,59,0.15) !important; }
 API_BASE = "http://localhost:8000/api"
 
 def risk_color(cat: str):
-    return {"HIGH": ("#ef4444", "#dc2626"), "MEDIUM": ("#f59e0b", "#d97706"), "LOW": ("#10b981", "#059669")}.get(cat, ("#10b981", "#059669"))
+    return {"HIGH": ("#ef4444", "#dc2626"), "MEDIUM": ("#f59e0b", "#d97706"), "LOW": ("#22c55e", "#16a34a")}.get(cat, ("#22c55e", "#16a34a"))
 
 def sev_badge(sev: str) -> str:
     s = sev.upper()
@@ -264,47 +276,20 @@ def update_rocm_stats():
     st.session_state.vram_usage = min(24000, max(1000, st.session_state.vram_usage + random.randint(-500, 1500)))
     st.session_state.compute_load = min(100, max(5, st.session_state.compute_load + random.randint(-15, 25)))
 
-# ── Status Bar / Header ───────────────────────────────────────────────────────
-header_col1, header_col2 = st.columns([1, 2])
-with header_col1:
-    st.markdown("""
-    <div style="display:flex;align-items:center;gap:1rem;margin-bottom:1rem;">
-        <div style="font-size:2.5rem;color:#e5383b;">🩸</div>
-        <div>
-            <h1 style="font-size:1.8rem;font-weight:800;color:#f8fafc;margin:0;letter-spacing:0.05em;text-transform:uppercase;">
-                SentryScreen <span style="color:#e5383b;">Copilot</span>
-            </h1>
-            <div style="font-family:'Fira Code', monospace;color:#fca5a5;font-size:0.8rem;">
-                Advanced Threat Intelligence
-            </div>
+# ── Header ────────────────────────────────────────────────────────────────────
+st.markdown("""
+<div style="display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;">
+    <div style="font-size:2.5rem;color:#e5383b;">🩸</div>
+    <div>
+        <h1 style="font-size:1.8rem;font-weight:800;color:#f8fafc;margin:0;letter-spacing:0.05em;text-transform:uppercase;">
+            SentryScreen <span style="color:#e5383b;">Copilot</span>
+        </h1>
+        <div style="font-family:'Fira Code', monospace;color:#fca5a5;font-size:0.8rem;">
+            Advanced Threat Intelligence
         </div>
     </div>
-    """, unsafe_allow_html=True)
-
-with header_col2:
-    # ROCm Status Bar
-    try:
-        health = requests.get(f"{API_BASE}/health", timeout=2).json()
-        dev_node = health.get("device_name", "AMD Instinct MI250X")
-    except:
-        dev_node = "AMD Instinct MI250X (OFFLINE)"
-    
-    st.markdown(f"""
-    <div style="display:flex;gap:1.5rem;justify-content:flex-end;align-items:center;height:100%;">
-        <div style="background:#111827;border:1px solid #e5383b;border-radius:6px;padding:0.5rem 1rem;font-family:'Fira Code', monospace;font-size:0.75rem;">
-            <div style="color:#fca5a5;margin-bottom:0.2rem;">ROCm NODE</div>
-            <div style="color:#f8fafc;font-weight:700;">{dev_node}</div>
-        </div>
-        <div style="background:#111827;border:1px solid #e5383b;border-radius:6px;padding:0.5rem 1rem;font-family:'Fira Code', monospace;font-size:0.75rem;">
-            <div style="color:#fca5a5;margin-bottom:0.2rem;">VRAM ALLOC</div>
-            <div style="color:#f8fafc;font-weight:700;">{st.session_state.vram_usage} MB / 24576 MB</div>
-        </div>
-        <div style="background:#111827;border:1px solid #e5383b;border-radius:6px;padding:0.5rem 1rem;font-family:'Fira Code', monospace;font-size:0.75rem;">
-            <div style="color:#fca5a5;margin-bottom:0.2rem;">COMPUTE</div>
-            <div style="color:#f8fafc;font-weight:700;">{st.session_state.compute_load}% LOAD</div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+</div>
+""", unsafe_allow_html=True)
 
 # ── Tabs Navigation ───────────────────────────────────────────────────────────
 tab_screen, tab_audit, tab_comp, tab_rocm = st.tabs([
@@ -340,7 +325,6 @@ with tab_screen:
     st.markdown("<hr style='margin:1.5rem 0;'>", unsafe_allow_html=True)
 
     if screen_clicked and query.strip():
-        update_rocm_stats()
         if query.strip() not in st.session_state.recent_sessions:
             st.session_state.recent_sessions.append(query.strip())
             
@@ -348,7 +332,7 @@ with tab_screen:
             try:
                 res = requests.post(
                     f"{API_BASE}/screen",
-                    json={"entity_name": query.strip(), "top_k": 10, "threshold": 0.15, "use_live_web": use_live_web},
+                    json={"entity_name": query.strip(), "top_k": 15, "threshold": 0.0, "use_live_web": use_live_web},
                     timeout=90,
                 )
                 
@@ -453,21 +437,6 @@ with tab_screen:
                         </div>
                         """, unsafe_allow_html=True)
                         
-                    # ── Incident Timeline ──
-                    st.markdown("""<div class="ss-card-title" style="margin-top:1.5rem;">INCIDENT TIMELINE</div>""", unsafe_allow_html=True)
-                    if articles:
-                        # Extract dates and counts for timeline
-                        df_dates = pd.DataFrame([a.get("published_date", "")[:10] for a in articles], columns=["Date"])
-                        df_dates = df_dates[df_dates["Date"] != ""]
-                        if not df_dates.empty:
-                            df_dates["Date"] = pd.to_datetime(df_dates["Date"], errors='coerce')
-                            df_dates = df_dates.dropna()
-                            df_counts = df_dates.groupby(df_dates['Date'].dt.date).size().reset_index(name='Count')
-                            df_counts = df_counts.set_index('Date')
-                            st.bar_chart(df_counts, color="#e5383b", use_container_width=True)
-                    else:
-                        st.markdown("<div style='color:#6b2121;font-family:\"Fira Code\",monospace;'>[NO TIMELINE DATA]</div>", unsafe_allow_html=True)
-                        
                     # ── Publication Cards ──
                     art_count = len(articles)
                     st.markdown(f"""
@@ -477,6 +446,9 @@ with tab_screen:
                     </div>
                     """, unsafe_allow_html=True)
                     
+                    if art_count == 0:
+                        st.markdown("<div style='color:#6b2121;font-family:\"Fira Code\",monospace;'>[NO PUBLICATIONS DETECTED EVEN WITH 0.0 THRESHOLD]</div>", unsafe_allow_html=True)
+                        
                     for art in articles:
                         sev = art.get("severity_label", "LOW").upper()
                         rel = art.get("relevance_score", 0)
@@ -505,7 +477,7 @@ with tab_screen:
                             """, unsafe_allow_html=True)
                             
                     # ── Human in the Loop ──
-                    st.markdown("""<div class="ss-card-title" style="margin-top:2rem;">HUMAN-IN-THE-LOOP DECISION</div>""", unsafe_allow_html=True)
+                    st.markdown("""<div class="ss-card-title-green" style="margin-top:2rem;">HUMAN-IN-THE-LOOP DECISION</div>""", unsafe_allow_html=True)
                     notes = st.text_area("ANALYST NOTES", placeholder="Document reasoning for decision...", height=100, key="analyst_notes")
                     
                     b1, b2, b3 = st.columns(3)
@@ -517,6 +489,7 @@ with tab_screen:
                         "risk_category": risk_cat,
                     }
                     
+                    # Customizing the APPROVE button explicitly inside markdown wrapper
                     with b1:
                         if st.button("✅ APPROVE (FALSE POSITIVE)", use_container_width=True):
                             requests.post(f"{API_BASE}/audit", json={**audit_base, "action": "APPROVE"})
@@ -598,55 +571,56 @@ with tab_comp:
 # TAB: ROCm GPU DIAGNOSTICS
 # ==============================================================================
 with tab_rocm:
-    st.markdown("""<div class="ss-card-title">SYSTEM HEALTH & GPU TELEMETRY</div>""", unsafe_allow_html=True)
+    st.markdown("""<div class="ss-card-title-green">SYSTEM HEALTH & GPU TELEMETRY (AUTO-REFRESHING)</div>""", unsafe_allow_html=True)
     
-    if st.button("🔄 REFRESH TELEMETRY"):
+    @st.fragment(run_every="1s")
+    def render_rocm_telemetry():
         update_rocm_stats()
-        
-    try:
-        health = requests.get(f"{API_BASE}/health", timeout=5).json()
-        stats = requests.get(f"{API_BASE}/dataset-stats", timeout=5).json()
-        
-        r1, r2, r3, r4 = st.columns(4)
-        r1.metric("API STATUS", health.get("status", "UNKNOWN").upper())
-        r2.metric("COMPUTE NODE", health.get("device_name", "UNKNOWN"))
-        r3.metric("MODEL LOADED", "YES" if health.get("model_loaded") else "NO")
-        r4.metric("DATASET SIZE", f"{stats.get('total_articles', 0):,}")
-        
-        st.markdown("<hr style='margin:2rem 0;'>", unsafe_allow_html=True)
-        
-        # Simulated GPU Dashboard
-        col_g1, col_g2 = st.columns(2)
-        with col_g1:
-            st.markdown(f"""
-            <div class="ss-card">
-                <div class="ss-card-title">VRAM ALLOCATION (MiB)</div>
-                <div style="font-family:'Fira Code',monospace;font-size:2.5rem;color:#f8fafc;font-weight:800;margin-bottom:1rem;">
-                    {st.session_state.vram_usage} <span style="font-size:1rem;color:#6b2121;">/ 24576</span>
-                </div>
-                <div style="background:#000;border:1px solid #333;height:12px;">
-                    <div style="width:{min(100, st.session_state.vram_usage/24576*100):.1f}%;height:100%;background:#e5383b;"></div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
             
-        with col_g2:
-            st.markdown(f"""
-            <div class="ss-card">
-                <div class="ss-card-title">COMPUTE ENGINE LOAD</div>
-                <div style="font-family:'Fira Code',monospace;font-size:2.5rem;color:#f8fafc;font-weight:800;margin-bottom:1rem;">
-                    {st.session_state.compute_load}%
-                </div>
-                <div style="background:#000;border:1px solid #333;height:12px;">
-                    <div style="width:{st.session_state.compute_load}%;height:100%;background:#e5383b;"></div>
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+        try:
+            health = requests.get(f"{API_BASE}/health", timeout=5).json()
+            stats = requests.get(f"{API_BASE}/dataset-stats", timeout=5).json()
             
-        st.markdown(f"""
-        <div class="ss-card">
-            <div class="ss-card-title">DRIVER INFORMATION</div>
-            <pre style="background:#000;border:1px solid #333;color:#fca5a5;padding:1rem;font-family:'Fira Code',monospace;font-size:0.8rem;border-radius:4px;">
+            r1, r2, r3, r4 = st.columns(4)
+            r1.metric("API STATUS", health.get("status", "UNKNOWN").upper())
+            r2.metric("COMPUTE NODE", health.get("device_name", "UNKNOWN"))
+            r3.metric("MODEL LOADED", "YES" if health.get("model_loaded") else "NO")
+            r4.metric("DATASET SIZE", f"{stats.get('total_articles', 0):,}")
+            
+            st.markdown("<hr style='border-color:rgba(34,197,94,0.15); margin:2rem 0;'>", unsafe_allow_html=True)
+            
+            # Simulated GPU Dashboard
+            col_g1, col_g2 = st.columns(2)
+            with col_g1:
+                st.markdown(f"""
+                <div class="ss-card" style="border-color: rgba(34,197,94,0.3);">
+                    <div class="ss-card-title-green">VRAM ALLOCATION (MiB)</div>
+                    <div style="font-family:'Fira Code',monospace;font-size:2.5rem;color:#f8fafc;font-weight:800;margin-bottom:1rem;">
+                        {st.session_state.vram_usage} <span style="font-size:1rem;color:#16a34a;">/ 24576</span>
+                    </div>
+                    <div style="background:#000;border:1px solid #333;height:12px;">
+                        <div style="width:{min(100, st.session_state.vram_usage/24576*100):.1f}%;height:100%;background:#22c55e;"></div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+            with col_g2:
+                st.markdown(f"""
+                <div class="ss-card" style="border-color: rgba(34,197,94,0.3);">
+                    <div class="ss-card-title-green">COMPUTE ENGINE LOAD</div>
+                    <div style="font-family:'Fira Code',monospace;font-size:2.5rem;color:#f8fafc;font-weight:800;margin-bottom:1rem;">
+                        {st.session_state.compute_load}%
+                    </div>
+                    <div style="background:#000;border:1px solid #333;height:12px;">
+                        <div style="width:{st.session_state.compute_load}%;height:100%;background:#22c55e;"></div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                
+            st.markdown(f"""
+            <div class="ss-card" style="border-color: rgba(34,197,94,0.3);">
+                <div class="ss-card-title-green">DRIVER INFORMATION</div>
+                <pre style="background:#000;border:1px solid #333;color:#4ade80;padding:1rem;font-family:'Fira Code',monospace;font-size:0.8rem;border-radius:4px;">
 Node: {health.get('device', 'cuda:0')}
 Architecture: CDNA 2
 Driver Version: 5.4.3
@@ -654,9 +628,11 @@ HIP Runtime: 5.4.22804
 System RAM: 256 GB
 PyTorch Version: 2.1.0+rocm5.4.2
 FastAPI Backend: v{health.get('version', '1.0')}
-            </pre>
-        </div>
-        """, unsafe_allow_html=True)
-        
-    except Exception as e:
-        st.error(f"TELEMETRY OFFLINE: {e}")
+                </pre>
+            </div>
+            """, unsafe_allow_html=True)
+            
+        except Exception as e:
+            st.error(f"TELEMETRY OFFLINE: {e}")
+
+    render_rocm_telemetry()
