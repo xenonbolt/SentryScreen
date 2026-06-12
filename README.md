@@ -62,6 +62,6 @@ npm run dev
    - **Human Review**: Analyst decision buttons that append to an audit log
 
 ## GPU Support (AMD ROCm)
-- **SentenceTransformers** automatically detects and uses the ROCm device (exposed as `cuda` via PyTorch HIP).
+- **SentenceTransformers** automatically detects and uses the ROCm device (exised as `cuda` via PyTorch HIP).
 - **FAISS**: The backend attempts to load `faiss-gpu`. If not available (requires custom ROCm build), it gracefully falls back to CPU indexing.
 - Device detection is surfaced in the UI footer.

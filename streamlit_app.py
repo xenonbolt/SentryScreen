@@ -50,11 +50,12 @@ with st.sidebar:
 st.title("Entity Screening")
 
 query = st.text_input("Enter Company or Person Name", placeholder="e.g., Nexum Capital Partners", key="search_query")
+use_live_web = st.checkbox("Enable Live Web Scraping (Real-time Search via DuckDuckGo)")
 
 if st.button("Screen Entity", type="primary") and query:
-    with st.spinner("Screening entity across vector database..."):
+    with st.spinner("Screening entity..."):
         try:
-            res = requests.post(f"{API_BASE}/screen", json={"entity_name": query, "top_k": 10, "threshold": 0.15})
+            res = requests.post(f"{API_BASE}/screen", json={"entity_name": query, "top_k": 10, "threshold": 0.15, "use_live_web": use_live_web})
             
             if res.status_code == 200:
                 data = res.json()

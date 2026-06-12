@@ -118,6 +118,7 @@ class MediaRetrievalAgent:
         aliases: List[str],
         top_k: int = TOP_K_RESULTS,
         threshold: float = RELEVANCE_THRESHOLD,
+        use_live_web: bool = False,
     ) -> List[Tuple[Dict[str, Any], float]]:
         """
         Find the top-K articles most semantically similar to the entity query.
@@ -133,6 +134,9 @@ class MediaRetrievalAgent:
         """
         if not self._initialized:
             self.initialize()
+
+        if use_live_web:
+            return self._retrieve_live_web(query_name, aliases, top_k, threshold)
 
         # Compose a rich query string from the entity name and its aliases
         query_parts = [query_name] + aliases[:4]
@@ -188,6 +192,76 @@ class MediaRetrievalAgent:
     @property
     def is_initialized(self) -> bool:
         return self._initialized
+
+    # ── Live Web Scraping ──────────────────────────────────────────────────
+
+    def _retrieve_live_web(
+        self, query_name: str, aliases: List[str], top_k: int, threshold: float
+    ) -> List[Tuple[Dict[str, Any], float]]:
+        from duckduckgo_search import DDGS
+        import requests
+        from bs4 import BeautifulSoup
+        from datetime import datetime
+
+        search_query = f'"{query_name}" AND (fraud OR money laundering OR sanctions OR indictment OR fine OR arrest OR corruption)'
+        logger.info(f"[MediaRetrieval] Live scraping DDG for: {search_query}")
+
+        scraped_articles = []
+        try:
+            with DDGS() as ddgs:
+                results = list(ddgs.text(search_query, max_results=top_k * 2))
+                for r in results:
+                    if len(scraped_articles) >= top_k:
+                        break
+                    url = r.get("href", "")
+                    title = r.get("title", "")
+                    article_text = ""
+                    try:
+                        headers = {"User-Agent": "Mozilla/5.0"}
+                        resp = requests.get(url, headers=headers, timeout=5)
+                        if resp.status_code == 200:
+                            soup = BeautifulSoup(resp.text, "html.parser")
+                            article_text = " ".join([p.get_text() for p in soup.find_all("p")])
+                    except Exception as e:
+                        logger.warning(f"[MediaRetrieval] Failed to fetch {url}: {e}")
+                    
+                    if not article_text.strip():
+                        article_text = r.get("body", "")
+                    if not article_text.strip():
+                        continue
+
+                    art = {
+                        "id": f"LIVE_{len(scraped_articles)}",
+                        "entity_name": query_name,
+                        "article_title": title,
+                        "article_text": article_text[:3000],
+                        "source": url,
+                        "published_date": datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ"),
+                        "category": "LIVE_WEB_HIT",
+                        "severity_label": "HIGH",
+                        "country": "Unknown"
+                    }
+                    scraped_articles.append(art)
+        except Exception as e:
+            logger.error(f"[MediaRetrieval] DDGS Error: {e}")
+
+        if not scraped_articles:
+            return []
+
+        # Encode and score dynamically
+        texts = [f"{a['entity_name']} {a['article_title']} {a['article_text'][:400]}" for a in scraped_articles]
+        art_embeddings = self.model.encode(texts, convert_to_numpy=True, normalize_embeddings=True).astype(np.float32)
+        
+        q_vec = self.model.encode([query_name], convert_to_numpy=True, normalize_embeddings=True).astype(np.float32)[0]
+        
+        results = []
+        for i, art in enumerate(scraped_articles):
+            score = float(np.dot(q_vec, art_embeddings[i]))
+            if score >= threshold:
+                results.append((art, round(score, 6)))
+        
+        results.sort(key=lambda x: x[1], reverse=True)
+        return results
 
 
 # ── Module-level singleton ────────────────────────────────────────────────────

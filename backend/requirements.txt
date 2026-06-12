@@ -39,3 +39,5 @@ httpx==0.28.1
 
 # Utilities
 numpy>=1.26.0
+duckduckgo-search>=6.0.0
+beautifulsoup4>=4.12.0

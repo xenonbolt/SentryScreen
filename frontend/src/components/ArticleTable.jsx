@@ -71,7 +71,15 @@ export default function ArticleTable({ articles }) {
                 </h3>
                 
                 <div className="text-sm text-slate-500 flex items-center gap-2">
-                  <span className="font-medium text-slate-400">{art.source}</span>
+                  <span className="font-medium text-slate-400">
+                    {art.source.startsWith('http') ? (
+                      <a href={art.source} target="_blank" rel="noopener noreferrer" className="hover:text-indigo-400 hover:underline flex items-center gap-1">
+                        Live Web Link <ExternalLink size={12} />
+                      </a>
+                    ) : (
+                      art.source
+                    )}
+                  </span>
                   <span>•</span>
                   <span>Rel: {art.relevance_score.toFixed(2)}</span>
                   <span>•</span>

@@ -16,11 +16,11 @@ export default function App() {
   const [error, setError] = useState(null);
   const [auditTrigger, setAuditTrigger] = useState(0);
 
-  const handleSearch = async (query) => {
+  const handleSearch = async (query, useLiveWeb) => {
     setIsSearching(true);
     setError(null);
     try {
-      const res = await screenEntity({ entity_name: query, top_k: 10, threshold: 0.15 });
+      const res = await screenEntity({ entity_name: query, top_k: 10, threshold: 0.15, use_live_web: useLiveWeb });
       setResult(res);
     } catch (err) {
       setError(err.message || 'An error occurred during screening');

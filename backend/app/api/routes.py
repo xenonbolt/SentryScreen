@@ -114,6 +114,7 @@ async def screen_entity(request: ScreeningRequest) -> ScreeningResponse:
         aliases=resolved.aliases,
         top_k=request.top_k,
         threshold=request.threshold,
+        use_live_web=request.use_live_web,
     )
 
     # 3 — Relevance Scoring

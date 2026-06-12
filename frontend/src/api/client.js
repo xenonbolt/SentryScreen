@@ -17,10 +17,10 @@ async function request(path, options = {}) {
 }
 
 /** Screen an entity for adverse media */
-export async function screenEntity({ entity_name, top_k = 10, threshold = 0.2 }) {
+export async function screenEntity({ entity_name, top_k = 10, threshold = 0.2, use_live_web = false }) {
   return request('/screen', {
     method: 'POST',
-    body: JSON.stringify({ entity_name, top_k, threshold }),
+    body: JSON.stringify({ entity_name, top_k, threshold, use_live_web }),
   })
 }
 

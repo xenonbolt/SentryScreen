@@ -3,11 +3,12 @@ import { Search, Loader2 } from 'lucide-react';
 
 export default function SearchBar({ onSearch, isSearching }) {
   const [query, setQuery] = React.useState('Nexum Capital Partners');
+  const [useLiveWeb, setUseLiveWeb] = React.useState(false);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (query.trim() && !isSearching) {
-      onSearch(query.trim());
+      onSearch(query.trim(), useLiveWeb);
     }
   };
 
@@ -38,6 +39,19 @@ export default function SearchBar({ onSearch, isSearching }) {
             )}
           </button>
         </div>
+      </div>
+      </div>
+      <div className="mt-3 flex items-center justify-center gap-2 text-sm text-slate-400">
+        <label className="flex items-center gap-2 cursor-pointer hover:text-slate-300 transition-colors">
+          <input 
+            type="checkbox" 
+            className="w-4 h-4 rounded border-slate-700 bg-slate-800 text-indigo-500 focus:ring-indigo-500/50"
+            checked={useLiveWeb}
+            onChange={(e) => setUseLiveWeb(e.target.checked)}
+            disabled={isSearching}
+          />
+          Enable Live Web Scraping (Real-time Search)
+        </label>
       </div>
     </form>
   );
