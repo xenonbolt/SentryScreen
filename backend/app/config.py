@@ -7,15 +7,84 @@ Adverse Media Screening Copilot. Optimised for AMD MI300X (ROCm).
 
 import os
 import logging
+import logging.handlers
+import sys
 from pathlib import Path
 
-# ── Logging ───────────────────────────────────────────────────────────────────
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)-8s | %(name)s — %(message)s",
-    datefmt="%Y-%m-%dT%H:%M:%S",
-)
-logger = logging.getLogger("adverse_media")
+# ── Logging ─────────────────────────────────────────────────────────────────────
+
+# ── Paths (defined early so LOG_DIR can use BASE_DIR) ──────────────────────
+BASE_DIR_EARLY = Path(__file__).parent.parent  # backend/
+LOG_DIR        = BASE_DIR_EARLY / "logs"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
+LOG_FILE = LOG_DIR / "sentryscreen.log"
+
+
+class _ColourFormatter(logging.Formatter):
+    """ANSI-coloured log levels for the console handler."""
+    _GREY   = "\033[90m"
+    _GREEN  = "\033[32m"
+    _YELLOW = "\033[33m"
+    _RED    = "\033[31m"
+    _BOLD_RED = "\033[1;31m"
+    _RESET  = "\033[0m"
+    _CYAN   = "\033[36m"
+
+    LEVEL_COLORS = {
+        logging.DEBUG:    _GREY,
+        logging.INFO:     _GREEN,
+        logging.WARNING:  _YELLOW,
+        logging.ERROR:    _RED,
+        logging.CRITICAL: _BOLD_RED,
+    }
+
+    FMT = "%(asctime)s {lvl}%(levelname)-8s{rst} {cyan}%(name)s{rst} — %(message)s"
+    DATEFMT = "%Y-%m-%dT%H:%M:%S"
+
+    def format(self, record: logging.LogRecord) -> str:  # type: ignore[override]
+        color = self.LEVEL_COLORS.get(record.levelno, self._GREY)
+        fmt = self.FMT.format(lvl=color, rst=self._RESET, cyan=self._CYAN)
+        formatter = logging.Formatter(fmt, datefmt=self.DATEFMT)
+        return formatter.format(record)
+
+
+def _setup_logging() -> None:
+    root = logging.getLogger()
+    if root.handlers:
+        return  # already configured (e.g. during reload)
+
+    root.setLevel(logging.DEBUG)
+
+    # ── Console: colour, INFO+ ───────────────────────────────────────
+    console = logging.StreamHandler(sys.stdout)
+    console.setLevel(logging.INFO)
+    console.setFormatter(_ColourFormatter())
+    root.addHandler(console)
+
+    # ── Rotating file: plain text, DEBUG+, 5 MB × 5 backups ───────────────
+    file_handler = logging.handlers.RotatingFileHandler(
+        LOG_FILE,
+        maxBytes=5 * 1024 * 1024,  # 5 MB
+        backupCount=5,
+        encoding="utf-8",
+    )
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(logging.Formatter(
+        fmt="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+        datefmt="%Y-%m-%dT%H:%M:%S",
+    ))
+    root.addHandler(file_handler)
+
+    # Silence noisy third-party loggers
+    for noisy in ("httpx", "httpcore", "urllib3", "sentence_transformers",
+                  "transformers", "faiss"):
+        logging.getLogger(noisy).setLevel(logging.WARNING)
+
+
+_setup_logging()
+logger = logging.getLogger("sentryscreen")
+logger.info(f"Logging initialised — file: {LOG_FILE}")
+
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 BASE_DIR     = Path(__file__).parent

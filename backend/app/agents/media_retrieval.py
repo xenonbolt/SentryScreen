@@ -198,70 +198,169 @@ class MediaRetrievalAgent:
     def _retrieve_live_web(
         self, query_name: str, aliases: List[str], top_k: int, threshold: float
     ) -> List[Tuple[Dict[str, Any], float]]:
+        """
+        Fetch recent news via DuckDuckGo News + Text search.
+        Strategy:
+          1. ddgs.news()  — recent news headlines (best for recency)
+          2. ddgs.text()  — broader adverse-keyword web search
+        DDG body snippets are used as primary text; full-page scraping
+        is attempted as a best-effort enrichment but never required.
+        """
         from duckduckgo_search import DDGS
-        import requests
+        import requests as _req
         from bs4 import BeautifulSoup
-        from datetime import datetime
+        from datetime import datetime, timezone
 
-        search_query = f'"{query_name}" AND (fraud OR money laundering OR sanctions OR indictment OR fine OR arrest OR corruption)'
-        logger.info(f"[MediaRetrieval] Live scraping DDG for: {search_query}")
+        # Broad news query + targeted adverse query
+        news_query    = query_name
+        adverse_query = (
+            f'"{query_name}" '
+            f'(fraud OR scandal OR sanction OR fine OR lawsuit OR '
+            f'investigation OR corruption OR arrest OR indictment OR controversy)'
+        )
+        logger.info(f"[MediaRetrieval] Live news fetch for: '{query_name}'")
 
-        scraped_articles = []
+        raw_articles: List[Dict[str, Any]] = []
+        seen_urls: set = set()
+
+        def _try_scrape(url: str, fallback: str) -> str:
+            """Best-effort full-page scrape; return fallback on any error."""
+            if not url or url in seen_urls:
+                return fallback
+            try:
+                headers = {
+                    "User-Agent": (
+                        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                        "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+                    )
+                }
+                resp = _req.get(url, headers=headers, timeout=6)
+                if resp.status_code == 200:
+                    soup = BeautifulSoup(resp.text, "html.parser")
+                    paragraphs = " ".join(p.get_text(" ", strip=True) for p in soup.find_all("p"))
+                    if len(paragraphs) > len(fallback):
+                        return paragraphs[:4000]
+            except Exception as exc:
+                logger.debug(f"[MediaRetrieval] Scrape skipped ({url}): {exc}")
+            return fallback
+
+        def _normalise_date(raw) -> str:
+            if not raw:
+                return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            s = str(raw)
+            # DDG news dates arrive as "2024-06-12T..." or just a date string
+            if "T" in s:
+                return s[:19] + "Z"
+            if len(s) >= 10:
+                return s[:10] + "T00:00:00Z"
+            return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
         try:
             with DDGS() as ddgs:
-                results = list(ddgs.text(search_query, max_results=top_k * 2))
-                for r in results:
-                    if len(scraped_articles) >= top_k:
-                        break
-                    url = r.get("href", "")
-                    title = r.get("title", "")
-                    article_text = ""
-                    try:
-                        headers = {"User-Agent": "Mozilla/5.0"}
-                        resp = requests.get(url, headers=headers, timeout=5)
-                        if resp.status_code == 200:
-                            soup = BeautifulSoup(resp.text, "html.parser")
-                            article_text = " ".join([p.get_text() for p in soup.find_all("p")])
-                    except Exception as e:
-                        logger.warning(f"[MediaRetrieval] Failed to fetch {url}: {e}")
-                    
-                    if not article_text.strip():
-                        article_text = r.get("body", "")
-                    if not article_text.strip():
-                        continue
+                # ── 1. Recent news ────────────────────────────────────────
+                try:
+                    news_hits = list(ddgs.news(news_query, max_results=top_k * 2))
+                    logger.info(f"[MediaRetrieval] DDG news returned {len(news_hits)} hits")
+                    for r in news_hits:
+                        if len(raw_articles) >= top_k:
+                            break
+                        url   = r.get("url") or r.get("href", "")
+                        title = r.get("title", "").strip()
+                        body  = r.get("body", "").strip()
+                        if not title:
+                            continue
+                        seen_urls.add(url)
+                        text = _try_scrape(url, body) if body else body
+                        if not text.strip():
+                            text = title  # last resort: at least index the title
+                        raw_articles.append({
+                            "id":             f"LIVE_NEWS_{len(raw_articles)}",
+                            "entity_name":    query_name,
+                            "article_title":  title,
+                            "article_text":   text[:3000],
+                            "source":         url,
+                            "published_date": _normalise_date(r.get("date")),
+                            "category":       "NEWS",
+                            "severity_label": "MEDIUM",
+                            "country":        r.get("source", "Unknown"),
+                        })
+                except Exception as exc:
+                    logger.warning(f"[MediaRetrieval] DDG news search failed: {exc}")
 
-                    art = {
-                        "id": f"LIVE_{len(scraped_articles)}",
-                        "entity_name": query_name,
-                        "article_title": title,
-                        "article_text": article_text[:3000],
-                        "source": url,
-                        "published_date": datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ"),
-                        "category": "LIVE_WEB_HIT",
-                        "severity_label": "HIGH",
-                        "country": "Unknown"
-                    }
-                    scraped_articles.append(art)
-        except Exception as e:
-            logger.error(f"[MediaRetrieval] DDGS Error: {e}")
+                # ── 2. Adverse-keyword text search ────────────────────────
+                try:
+                    text_hits = list(ddgs.text(adverse_query, max_results=top_k * 2))
+                    logger.info(f"[MediaRetrieval] DDG text returned {len(text_hits)} hits")
+                    for r in text_hits:
+                        if len(raw_articles) >= top_k * 2:
+                            break
+                        url   = r.get("href", "")
+                        title = r.get("title", "").strip()
+                        body  = r.get("body", "").strip()
+                        if not title or url in seen_urls:
+                            continue
+                        seen_urls.add(url)
+                        text = _try_scrape(url, body)
+                        if not text.strip():
+                            text = title
+                        raw_articles.append({
+                            "id":             f"LIVE_WEB_{len(raw_articles)}",
+                            "entity_name":    query_name,
+                            "article_title":  title,
+                            "article_text":   text[:3000],
+                            "source":         url,
+                            "published_date": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+                            "category":       "LIVE_WEB_HIT",
+                            "severity_label": "HIGH",
+                            "country":        "Unknown",
+                        })
+                except Exception as exc:
+                    logger.warning(f"[MediaRetrieval] DDG text search failed: {exc}")
 
-        if not scraped_articles:
+        except Exception as exc:
+            logger.error(f"[MediaRetrieval] DDGS session error: {exc}")
+
+        if not raw_articles:
+            logger.warning("[MediaRetrieval] No live articles retrieved.")
             return []
 
-        # Encode and score dynamically
-        texts = [f"{a['entity_name']} {a['article_title']} {a['article_text'][:400]}" for a in scraped_articles]
-        art_embeddings = self.model.encode(texts, convert_to_numpy=True, normalize_embeddings=True).astype(np.float32)
-        
-        q_vec = self.model.encode([query_name], convert_to_numpy=True, normalize_embeddings=True).astype(np.float32)[0]
-        
-        results = []
-        for i, art in enumerate(scraped_articles):
-            score = float(np.dot(q_vec, art_embeddings[i]))
-            if score >= threshold:
+        logger.info(f"[MediaRetrieval] Scoring {len(raw_articles)} live articles...")
+
+        # Encode all article texts
+        encode_texts = [
+            f"{a['article_title']} {a['article_text'][:400]}"
+            for a in raw_articles
+        ]
+        art_vecs = self.model.encode(
+            encode_texts,
+            convert_to_numpy=True,
+            normalize_embeddings=True,
+            show_progress_bar=False,
+        ).astype(np.float32)
+
+        # Query vector — use entity name + aliases for richer signal
+        query_parts  = [query_name] + aliases[:3]
+        query_text   = " ".join(dict.fromkeys(query_parts))
+        q_vec = self.model.encode(
+            [query_text],
+            convert_to_numpy=True,
+            normalize_embeddings=True,
+        ).astype(np.float32)[0]
+
+        # Lower threshold for live results (snippets are shorter → lower cosine)
+        live_threshold = min(threshold * 0.5, 0.10)
+
+        results: List[Tuple[Dict[str, Any], float]] = []
+        for i, art in enumerate(raw_articles):
+            score = float(np.dot(q_vec, art_vecs[i]))
+            if score >= live_threshold:
                 results.append((art, round(score, 6)))
-        
+
         results.sort(key=lambda x: x[1], reverse=True)
-        return results
+        logger.info(
+            f"[MediaRetrieval] Live results: {len(results)} above threshold={live_threshold:.3f}"
+        )
+        return results[:top_k]
 
 
 # ── Module-level singleton ────────────────────────────────────────────────────

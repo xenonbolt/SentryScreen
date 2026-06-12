@@ -87,14 +87,18 @@ async def screen_entity(request: ScreeningRequest) -> ScreeningResponse:
     Full 6-agent adverse media screening pipeline.
 
     1. Entity Resolver      — disambiguate name
-    2. Media Retrieval      — FAISS semantic search
+    2. Media Retrieval      — FAISS semantic search / live web
     3. Relevance Scorer     — normalise + recency decay
     4. Risk Analyst         — weighted risk formula
     5. Explainability Agent — keywords, narratives, summary
     6. Decision Agent       — final verdict + audit trail
     """
     t0 = time.perf_counter()
-    logger.info(f"[API] Screening request: entity='{request.entity_name}'")
+    mode = "LIVE-WEB" if request.use_live_web else "DATASET"
+    logger.info(
+        f"[Pipeline] ── START ── entity='{request.entity_name}' "
+        f"mode={mode} top_k={request.top_k} threshold={request.threshold}"
+    )
 
     if not media_retrieval_agent.is_initialized:
         raise HTTPException(
@@ -102,13 +106,21 @@ async def screen_entity(request: ScreeningRequest) -> ScreeningResponse:
             detail="Retrieval agent is still initialising. Please retry in a few seconds.",
         )
 
-    # 1 — Entity Resolution
+    # ── Step 1: Entity Resolution ─────────────────────────────────────────
+    s1 = time.perf_counter()
     resolved = resolve_entity(
         query_name=request.entity_name,
         known_entities=media_retrieval_agent.known_entities,
     )
+    t1 = (time.perf_counter() - s1) * 1000
+    logger.info(
+        f"[Pipeline] Step 1 EntityResolver  {t1:6.1f}ms  "
+        f"'{request.entity_name}' → '{resolved.resolved_name}' "
+        f"(conf={resolved.confidence:.2f})"
+    )
 
-    # 2 — Adverse Media Retrieval
+    # ── Step 2: Adverse Media Retrieval ──────────────────────────────────
+    s2 = time.perf_counter()
     retrieved = media_retrieval_agent.retrieve(
         query_name=resolved.resolved_name,
         aliases=resolved.aliases,
@@ -116,22 +128,47 @@ async def screen_entity(request: ScreeningRequest) -> ScreeningResponse:
         threshold=request.threshold,
         use_live_web=request.use_live_web,
     )
+    t2 = (time.perf_counter() - s2) * 1000
+    logger.info(
+        f"[Pipeline] Step 2 MediaRetrieval  {t2:6.1f}ms  "
+        f"{len(retrieved)} article(s) retrieved"
+    )
 
-    # 3 — Relevance Scoring
+    # ── Step 3: Relevance Scoring ─────────────────────────────────────────
+    s3 = time.perf_counter()
     scored = score_articles(retrieved, threshold=request.threshold)
+    t3 = (time.perf_counter() - s3) * 1000
+    logger.info(
+        f"[Pipeline] Step 3 RelevanceScorer {t3:6.1f}ms  "
+        f"{len(scored)} article(s) above threshold"
+    )
 
-    # 4 — Risk Analysis
+    # ── Step 4: Risk Analysis ─────────────────────────────────────────────
+    s4 = time.perf_counter()
     risk_articles, risk_score, risk_category, risk_breakdown = analyze_risk(scored)
+    t4 = (time.perf_counter() - s4) * 1000
+    logger.info(
+        f"[Pipeline] Step 4 RiskAnalyst     {t4:6.1f}ms  "
+        f"score={risk_score:.1f} category={risk_category.value}"
+    )
 
-    # 5 — Explainability
+    # ── Step 5: Explainability ────────────────────────────────────────────
+    s5 = time.perf_counter()
     explained_articles, explain_report = explain(
         entity_name=resolved.resolved_name,
         articles=risk_articles,
         risk_score=risk_score,
         risk_category=risk_category,
     )
+    t5 = (time.perf_counter() - s5) * 1000
+    logger.info(
+        f"[Pipeline] Step 5 Explainability  {t5:6.1f}ms  "
+        f"{len(explain_report.key_risk_factors)} risk factors, "
+        f"{len(explain_report.top_keywords)} keywords"
+    )
 
-    # 6 — Decision
+    # ── Step 6: Decision ──────────────────────────────────────────────────
+    s6 = time.perf_counter()
     response = make_decision(
         resolved_entity=resolved,
         enriched_articles=explained_articles,
@@ -140,6 +177,20 @@ async def screen_entity(request: ScreeningRequest) -> ScreeningResponse:
         risk_breakdown=risk_breakdown,
         explainability_report=explain_report,
         start_time=t0,
+    )
+    t6 = (time.perf_counter() - s6) * 1000
+    total_ms = (time.perf_counter() - t0) * 1000
+
+    logger.info(
+        f"[Pipeline] Step 6 Decision        {t6:6.1f}ms  "
+        f"screening_id={response.screening_id}"
+    )
+    logger.info(
+        f"[Pipeline] ── DONE ──  total={total_ms:.1f}ms  "
+        f"steps=[{t1:.0f}|{t2:.0f}|{t3:.0f}|{t4:.0f}|{t5:.0f}|{t6:.0f}]ms  "
+        f"entity='{resolved.resolved_name}'  "
+        f"risk={risk_score:.1f}({risk_category.value})  "
+        f"articles={len(explained_articles)}"
     )
 
     return response
