@@ -27,6 +27,8 @@ cd ..
 
 # 2. Frontend Setup
 echo "[2/3] Setting up React frontend..."
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt-get install -y nodejs
 cd frontend
 npm install
 cd ..
