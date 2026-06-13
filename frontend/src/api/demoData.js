@@ -1,0 +1,183 @@
+/**
+ * demoData.js — Realistic static demo payload used when the backend is unreachable.
+ * Mirrors the exact shape of the FastAPI ScreeningResponse schema.
+ */
+
+export const DEMO_SCREENING_RESULT = {
+  screening_id: 'DEMO-001',
+  entity: {
+    original_name: 'Genesis Global Minerals',
+    resolved_name: 'Genesis Global Minerals Ltd.',
+    confidence: 0.93,
+    aliases: ['GGM', 'Genesis Minerals', 'GGM Ltd.'],
+    entity_type: 'company',
+  },
+  risk_score: 78.4,
+  risk_category: 'HIGH',
+  confidence_score: 0.87,
+  risk_breakdown: {
+    relevance_component: 22.1,
+    severity_component: 17.4,
+    frequency_component: 16.0,
+    recency_component:  9.8,
+    sentiment_component: 13.1,
+    negative_news_count: 4,
+  },
+  explainability: {
+    summary:
+      "Adverse media screening for 'Genesis Global Minerals Ltd.' identified 7 relevant articles with a composite risk score of 78.4/100 (HIGH risk). 2 CRITICAL severity findings identified. Primary risk categories: environmental (3), bribery (2), fraud (2). Media coverage spans 2023-04-12 to 2025-11-03.",
+    key_risk_factors: [
+      '⚠️  Critical-severity adverse media detected',
+      '💰  Money laundering allegations on record',
+      '📰  High volume of adverse media (7 articles)',
+    ],
+    category_distribution: {
+      environmental: 3,
+      bribery: 2,
+      fraud: 2,
+    },
+    top_keywords: [
+      'environmental violations',
+      'bribery',
+      'Panama offshore',
+      'tax evasion',
+      'sanctions',
+      'criminal charges',
+    ],
+    timeline_analysis:
+      'Adverse media spans 2023-04-12 to 2025-11-03, indicating ongoing and recent risk exposure.',
+    confidence_explanation:
+      'High confidence: strong semantic match between entity query and flagged articles.',
+  },
+  articles: [
+    {
+      id: 'DEMO_ART_1',
+      entity_name: 'Genesis Global Minerals Ltd.',
+      article_title: 'Genesis Global Minerals Faces $220M Environmental Fine in Brazil',
+      article_text:
+        'Brazilian regulators levied a record $220 million fine against Genesis Global Minerals Ltd. following an investigation into illegal mining operations that caused widespread deforestation in the Amazon basin. The company is accused of falsifying environmental compliance reports for over three years.',
+      source: 'reuters.com/environment',
+      published_date: '2025-11-03T09:14:00Z',
+      category: 'environmental',
+      severity_label: 'critical',
+      country: 'Brazil',
+      relevance_score: 0.94,
+      risk_contribution: 88.2,
+      keywords: ['environmental violations', 'deforestation', 'fine', 'Amazon'],
+      why_flagged: 'Flagged: CRITICAL severity environmental content detected. Semantic relevance score: 0.94. Contributes 88.2 points to the aggregate risk score.',
+      relevance_reason: 'Reported by reuters.com/environment on 2025-11-03, this article directly associates Genesis Global Minerals Ltd. with environmental law violations. Severity is CRITICAL.',
+      sentiment_score: 0.91,
+      is_negative_news: true,
+    },
+    {
+      id: 'DEMO_ART_2',
+      entity_name: 'Genesis Global Minerals Ltd.',
+      article_title: 'GGM Executives Charged in Panama Offshore Bribery Scheme',
+      article_text:
+        'Three senior executives of Genesis Global Minerals were indicted on charges of bribery and money laundering related to a Panama offshore fund used to pay government officials. The DOJ probe has been ongoing since early 2024.',
+      source: 'ft.com/legal',
+      published_date: '2025-09-18T14:30:00Z',
+      category: 'bribery',
+      severity_label: 'critical',
+      country: 'Panama',
+      relevance_score: 0.89,
+      risk_contribution: 84.5,
+      keywords: ['bribery', 'Panama offshore', 'indicted', 'DOJ probe', 'money laundering'],
+      why_flagged: 'Flagged: CRITICAL severity bribery content detected. Contributes 84.5 points to aggregate risk score.',
+      relevance_reason: 'Reported by ft.com/legal on 2025-09-18.',
+      sentiment_score: 0.96,
+      is_negative_news: true,
+    },
+    {
+      id: 'DEMO_ART_3',
+      entity_name: 'Genesis Global Minerals Ltd.',
+      article_title: 'SEC Investigation Launched into GGM Financial Reporting',
+      article_text:
+        'The SEC has opened a formal investigation into Genesis Global Minerals Ltd. following whistleblower complaints alleging systematic fraud in quarterly financial disclosures, including inflated mineral reserves.',
+      source: 'wsj.com/finance',
+      published_date: '2025-07-22T11:00:00Z',
+      category: 'fraud',
+      severity_label: 'high',
+      country: 'USA',
+      relevance_score: 0.82,
+      risk_contribution: 76.1,
+      keywords: ['SEC investigation', 'fraud', 'whistleblower', 'financial reporting'],
+      why_flagged: 'Flagged: HIGH severity fraud content. Semantic relevance: 0.82.',
+      relevance_reason: 'Reported by wsj.com/finance on 2025-07-22.',
+      sentiment_score: 0.83,
+      is_negative_news: true,
+    },
+    {
+      id: 'DEMO_ART_4',
+      entity_name: 'Genesis Global Minerals Ltd.',
+      article_title: 'Mass Layoffs at Genesis Global — 3,400 Workers Cut',
+      article_text:
+        'Genesis Global Minerals announced sweeping job cuts affecting 3,400 workers across its South African and Brazilian operations. The company cited falling commodity prices and rising legal costs from ongoing regulatory investigations.',
+      source: 'bloomberg.com',
+      published_date: '2025-05-10T08:00:00Z',
+      category: 'operational',
+      severity_label: 'high',
+      country: 'South Africa',
+      relevance_score: 0.74,
+      risk_contribution: 68.3,
+      keywords: ['layoffs', 'job cuts', 'workforce reduction'],
+      why_flagged: 'Flagged: HIGH severity negative news. Sentiment weight 0.72.',
+      relevance_reason: 'Reported by bloomberg.com on 2025-05-10.',
+      sentiment_score: 0.72,
+      is_negative_news: true,
+    },
+    {
+      id: 'DEMO_ART_5',
+      entity_name: 'Genesis Global Minerals Ltd.',
+      article_title: 'Genesis Minerals Q3 Output Rises — Investors Cautious',
+      article_text:
+        'Genesis Global Minerals reported a modest 4% rise in Q3 mineral output despite headwinds from ongoing litigation. Investors remain cautious about the company\'s legal exposure, with shares down 22% year-to-date.',
+      source: 'mining-journal.com',
+      published_date: '2025-10-01T00:00:00Z',
+      category: 'operational',
+      severity_label: 'medium',
+      country: 'Global',
+      relevance_score: 0.61,
+      risk_contribution: 52.0,
+      keywords: ['litigation', 'shares down', 'cautious investors'],
+      why_flagged: 'Flagged: MEDIUM severity. Mixed sentiment — output growth offset by litigation risk.',
+      relevance_reason: 'Reported by mining-journal.com on 2025-10-01.',
+      sentiment_score: 0.45,
+      is_negative_news: false,
+    },
+  ],
+  total_articles_found: 7,
+  device_used: 'cpu',
+  processing_time_ms: 1823.4,
+  timestamp: new Date().toISOString(),
+};
+
+export const DEMO_HEALTH = {
+  status: 'online (demo)',
+  device: 'cpu',
+  device_name: 'Demo Mode — Backend Offline',
+  model_loaded: false,
+  dataset_size: 1250,
+  version: '1.0.0',
+};
+
+export const DEMO_AUDIT_LOG = [
+  {
+    screening_id: 'DEMO-001',
+    entity_name: 'Genesis Global Minerals Ltd.',
+    action: 'ESCALATE',
+    analyst_notes: 'Critical environmental and bribery findings confirmed. Escalated for EDD.',
+    risk_score: 78.4,
+    risk_category: 'HIGH',
+    timestamp: new Date(Date.now() - 3600000).toISOString(),
+  },
+  {
+    screening_id: 'DEMO-002',
+    entity_name: 'Apex FinTech Services',
+    action: 'REJECT',
+    analyst_notes: 'FinCEN fine confirmed. Entity blocked.',
+    risk_score: 82.1,
+    risk_category: 'HIGH',
+    timestamp: new Date(Date.now() - 7200000).toISOString(),
+  },
+];
