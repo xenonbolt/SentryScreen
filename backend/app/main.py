@@ -108,6 +108,16 @@ async def _request_logging_middleware(request: Request, call_next) -> Response:
     response.headers["X-Request-ID"] = req_id
     return response
 
+async def _jupyter_proxy_middleware(request: Request, call_next) -> Response:
+    """
+    Jupyter Server Proxy sends requests with the proxy path in X-Forwarded-Context.
+    By dynamically setting request.scope['root_path'], FastAPI automatically
+    fixes the Swagger UI /openapi.json links without hardcoding the workspace ID!
+    """
+    if "x-forwarded-context" in request.headers:
+        request.scope["root_path"] = request.headers["x-forwarded-context"]
+    return await call_next(request)
+
 
 # ── App Factory ───────────────────────────────────────────────────────────────
 
@@ -134,8 +144,9 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # ── Request logging (added after CORS so it sees real paths) ──────────
+    # ── Request logging & Jupyter Proxy handling ──────────────────────────
     app.middleware("http")(_request_logging_middleware)
+    app.middleware("http")(_jupyter_proxy_middleware)
 
     # ── Routes ────────────────────────────────────────────────────────────
     app.include_router(router, prefix="/api")

@@ -236,9 +236,21 @@ def analyze_risk(
 
     for art in scored_articles:
         rel  = art.get("relevance_score_normalized", art.get("relevance_score", 0.0))
-        sev  = _severity_weight(art.get("severity_label", "medium"))
         rec  = art.get("recency_factor", 0.50)
         sent = _compute_sentiment_weight(art)
+
+        # ── DYNAMIC FALSE POSITIVE MITIGATION ──
+        # Live web searches blindly assign HIGH severity to any hit from an adverse query.
+        # If NLP sentiment analysis strongly disagrees (score hits the 0.40 floor),
+        # it is a benign article (e.g. Wikipedia) that ranked high on DuckDuckGo. Downgrade it.
+        sev_label = art.get("severity_label", "medium")
+        if art.get("is_negative_news") and sent <= 0.45:
+            sev_label = "low"
+            art["severity_label"] = "low"
+            art["category"] = "GENERAL_NEWS"
+            art["is_negative_news"] = False
+            
+        sev  = _severity_weight(sev_label)
 
         contribution = (
             WEIGHT_RELEVANCE  * rel
