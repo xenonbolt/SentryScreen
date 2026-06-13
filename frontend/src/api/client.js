@@ -47,9 +47,22 @@ export const API_BASE = detectApiBase();
 export let isDemoMode = false;
 
 async function request(path, options = {}) {
+  const headers = { 'Content-Type': 'application/json', ...options.headers };
+
+  // If the backend is behind a Jupyter proxy that requires auth,
+  // pass VITE_JUPYTER_TOKEN=... via the command line to bypass the login wall.
+  const jupyterToken = import.meta.env.VITE_JUPYTER_TOKEN;
+  if (jupyterToken) {
+    headers['Authorization'] = `token ${jupyterToken}`;
+  }
+
+  // Also support query param fallback for strict proxies
+  const sep = path.includes('?') ? '&' : '?';
+  const urlPath = jupyterToken ? `${path}${sep}token=${jupyterToken}` : path;
+
   try {
-    const res = await fetch(`${API_BASE}${path}`, {
-      headers: { 'Content-Type': 'application/json', ...options.headers },
+    const res = await fetch(`${API_BASE}${urlPath}`, {
+      headers,
       ...options,
     });
     if (!res.ok) {
