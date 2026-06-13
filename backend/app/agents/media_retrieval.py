@@ -5,6 +5,14 @@ Loads the synthetic dataset, encodes all articles with a
 SentenceTransformer model (AMD ROCm / CUDA / CPU), builds a FAISS
 inner-product index, and retrieves the top-K most semantically
 similar articles for a given entity query.
+
+Live-web mode mimics a human analyst by firing three targeted
+Google-style queries per entity:
+  1. "Latest {entity} News"            — general recency
+  2. "Recent Negative News {entity}"   — adverse signal harvest
+  3. "{entity} layoffs OR fraud OR ..."— financial risk keywords
+Each matching page is fully read (newspaper3k → BeautifulSoup fallback)
+and tagged with is_negative_news based on which query retrieved it.
 """
 
 from __future__ import annotations
@@ -23,6 +31,12 @@ from app.config import (
 )
 
 logger = logging.getLogger(__name__)
+
+# ── Adverse keyword clusters for the third query ───────────────────────────────
+_ADVERSE_KEYWORDS = (
+    "layoffs OR \"job cuts\" OR fraud OR lawsuit OR bankruptcy OR scandal "
+    "OR fine OR penalty OR corruption OR \"data breach\" OR investigation"
+)
 
 
 class MediaRetrievalAgent:
@@ -128,6 +142,7 @@ class MediaRetrievalAgent:
             aliases:    Alternative names for the entity.
             top_k:      Maximum number of results to return.
             threshold:  Minimum cosine similarity score.
+            use_live_web: If True, perform live web scraping instead of FAISS lookup.
 
         Returns:
             Sorted list of (article_dict, similarity_score).
@@ -199,130 +214,255 @@ class MediaRetrievalAgent:
         self, query_name: str, aliases: List[str], top_k: int, threshold: float
     ) -> List[Tuple[Dict[str, Any], float]]:
         """
-        Fetch recent news via DuckDuckGo News + Text search.
-        Strategy:
-          1. ddgs.news()  — recent news headlines (best for recency)
-          2. ddgs.text()  — broader adverse-keyword web search
-        DDG body snippets are used as primary text; full-page scraping
-        is attempted as a best-effort enrichment but never required.
+        Mimics a human analyst Googling an entity in three passes:
+
+          Pass 1 — "Latest {entity} News"
+            → General recent news; marks is_negative_news=False by default.
+
+          Pass 2 — "Recent Negative News {entity}"
+            → Specifically targets adverse coverage; marks is_negative_news=True.
+
+          Pass 3 — "{entity} layoffs OR fraud OR lawsuit OR ..."
+            → Financial / legal risk keywords; marks is_negative_news=True.
+
+        Each result URL is visited and fully read (newspaper3k preferred,
+        BeautifulSoup <article>/<main>/<p> fallback) — mimicking a human
+        clicking a link and reading the page.
         """
         from duckduckgo_search import DDGS
-        import requests as _req
-        from bs4 import BeautifulSoup
         from datetime import datetime, timezone
 
-        # Broad news query + targeted adverse query
-        news_query    = query_name
-        adverse_query = f'"{query_name}"'
-        logger.info(f"[MediaRetrieval] Live news fetch for: '{query_name}'")
+        logger.info(
+            f"[MediaRetrieval] Live web — 3-query human-style search for: '{query_name}'"
+        )
 
         raw_articles: List[Dict[str, Any]] = []
         seen_urls: set = set()
 
-        def _try_scrape(url: str, fallback: str) -> str:
-            """Best-effort full-page scrape; return fallback on any error."""
-            if not url or url in seen_urls:
-                return fallback
-            try:
-                headers = {
-                    "User-Agent": (
-                        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
-                        "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
-                    )
-                }
-                resp = _req.get(url, headers=headers, timeout=6)
-                if resp.status_code == 200:
-                    soup = BeautifulSoup(resp.text, "html.parser")
-                    paragraphs = " ".join(p.get_text(" ", strip=True) for p in soup.find_all("p"))
-                    if len(paragraphs) > len(fallback):
-                        return paragraphs[:4000]
-            except Exception as exc:
-                logger.debug(f"[MediaRetrieval] Scrape skipped ({url}): {exc}")
-            return fallback
+        now_str = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
         def _normalise_date(raw) -> str:
             if not raw:
-                return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                return now_str
             s = str(raw)
-            # DDG news dates arrive as "2024-06-12T..." or just a date string
             if "T" in s:
                 return s[:19] + "Z"
             if len(s) >= 10:
                 return s[:10] + "T00:00:00Z"
-            return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            return now_str
+
+        # ── 1. Smart full-page reader (newspaper3k → BeautifulSoup) ───────
+        def _read_page(url: str, fallback: str) -> str:
+            """
+            Fully read a webpage the way a human would — prioritise article body.
+            Strategy:
+              A. newspaper3k  — cleans ads/nav/footers automatically
+              B. <article> / <main> tag extraction via BeautifulSoup
+              C. All <p> tags joined
+              D. DDG snippet fallback
+            """
+            if not url or url in seen_urls:
+                return fallback
+
+            import requests as _req
+            from bs4 import BeautifulSoup
+
+            headers = {
+                "User-Agent": (
+                    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+                )
+            }
+
+            # ── A. newspaper3k ─────────────────────────────────────────
+            try:
+                from newspaper import Article as _NpArticle
+                np_art = _NpArticle(url)
+                np_art.download()
+                np_art.parse()
+                text = (np_art.text or "").strip()
+                if len(text) > 200:
+                    logger.debug(f"[MediaRetrieval] newspaper3k extracted {len(text)} chars from {url}")
+                    return text[:5000]
+            except Exception as exc:
+                logger.debug(f"[MediaRetrieval] newspaper3k failed ({url}): {exc}")
+
+            # ── B + C. BeautifulSoup fallback ──────────────────────────
+            try:
+                resp = _req.get(url, headers=headers, timeout=8)
+                if resp.status_code != 200:
+                    return fallback
+
+                soup = BeautifulSoup(resp.text, "html.parser")
+
+                # Remove noise elements
+                for tag in soup(["script", "style", "nav", "header",
+                                 "footer", "aside", "form", "noscript"]):
+                    tag.decompose()
+
+                # Prefer semantic article/main containers
+                container = soup.find("article") or soup.find("main")
+                if container:
+                    text = " ".join(
+                        p.get_text(" ", strip=True)
+                        for p in container.find_all("p")
+                    )
+                    if len(text) > 200:
+                        return text[:5000]
+
+                # Fall back to all <p>
+                text = " ".join(
+                    p.get_text(" ", strip=True)
+                    for p in soup.find_all("p")
+                )
+                if len(text) > len(fallback):
+                    return text[:5000]
+
+            except Exception as exc:
+                logger.debug(f"[MediaRetrieval] BeautifulSoup scrape failed ({url}): {exc}")
+
+            return fallback
+
+        # ── Query definitions ──────────────────────────────────────────────
+        queries: List[Dict[str, Any]] = [
+            {
+                "label":           "general_news",
+                "ddg_query":       f"Latest {query_name} News",
+                "search_type":     "news",
+                "is_negative":     False,
+                "category":        "NEWS",
+                "severity_label":  "MEDIUM",
+                "max_results":     top_k,
+            },
+            {
+                "label":           "negative_news",
+                "ddg_query":       f"Recent Negative News {query_name}",
+                "search_type":     "news",
+                "is_negative":     True,
+                "category":        "NEGATIVE_NEWS",
+                "severity_label":  "HIGH",
+                "max_results":     top_k,
+            },
+            {
+                "label":           "adverse_keywords",
+                "ddg_query":       f"{query_name} {_ADVERSE_KEYWORDS}",
+                "search_type":     "text",
+                "is_negative":     True,
+                "category":        "ADVERSE_MEDIA",
+                "severity_label":  "HIGH",
+                "max_results":     top_k,
+            },
+        ]
 
         try:
             with DDGS() as ddgs:
-                # ── 1. Recent news ────────────────────────────────────────
-                try:
-                    news_hits = list(ddgs.news(news_query, max_results=top_k * 2))
-                    logger.info(f"[MediaRetrieval] DDG news returned {len(news_hits)} hits")
-                    for r in news_hits:
-                        if len(raw_articles) >= top_k:
-                            break
-                        url   = r.get("url") or r.get("href", "")
-                        title = r.get("title", "").strip()
-                        body  = r.get("body", "").strip()
-                        if not title:
-                            continue
-                        seen_urls.add(url)
-                        text = _try_scrape(url, body) if body else body
-                        if not text.strip():
-                            text = title  # last resort: at least index the title
-                        raw_articles.append({
-                            "id":             f"LIVE_NEWS_{len(raw_articles)}",
-                            "entity_name":    query_name,
-                            "article_title":  title,
-                            "article_text":   text[:3000],
-                            "source":         url,
-                            "published_date": _normalise_date(r.get("date")),
-                            "category":       "NEWS",
-                            "severity_label": "MEDIUM",
-                            "country":        r.get("source", "Unknown"),
-                        })
-                except Exception as exc:
-                    logger.warning(f"[MediaRetrieval] DDG news search failed: {exc}")
+                for q in queries:
+                    logger.info(
+                        f"[MediaRetrieval] Query [{q['label']}]: \"{q['ddg_query']}\""
+                    )
+                    try:
+                        if q["search_type"] == "news":
+                            hits = list(ddgs.news(q["ddg_query"], max_results=q["max_results"]))
+                        else:
+                            hits = list(ddgs.text(q["ddg_query"], max_results=q["max_results"]))
 
-                # ── 2. Adverse-keyword text search ────────────────────────
-                try:
-                    text_hits = list(ddgs.text(adverse_query, max_results=top_k * 2))
-                    logger.info(f"[MediaRetrieval] DDG text returned {len(text_hits)} hits")
-                    for r in text_hits:
-                        if len(raw_articles) >= top_k * 2:
-                            break
-                        url   = r.get("href", "")
-                        title = r.get("title", "").strip()
-                        body  = r.get("body", "").strip()
-                        if not title or url in seen_urls:
-                            continue
-                        seen_urls.add(url)
-                        text = _try_scrape(url, body)
-                        if not text.strip():
-                            text = title
-                        raw_articles.append({
-                            "id":             f"LIVE_WEB_{len(raw_articles)}",
-                            "entity_name":    query_name,
-                            "article_title":  title,
-                            "article_text":   text[:3000],
-                            "source":         url,
-                            "published_date": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
-                            "category":       "LIVE_WEB_HIT",
-                            "severity_label": "HIGH",
-                            "country":        "Unknown",
-                        })
-                except Exception as exc:
-                    logger.warning(f"[MediaRetrieval] DDG text search failed: {exc}")
+                        logger.info(
+                            f"[MediaRetrieval]   → {len(hits)} raw hits from DDG [{q['label']}]"
+                        )
+
+                        fetched_this_query = 0
+                        for r in hits:
+                            url   = r.get("url") or r.get("href", "")
+                            title = r.get("title", "").strip()
+                            body  = r.get("body", "").strip()
+
+                            if not title:
+                                continue
+                            if url in seen_urls:
+                                logger.debug(f"[MediaRetrieval] Skipping duplicate URL: {url}")
+                                continue
+
+                            seen_urls.add(url)
+
+                            # ── Read the full page (mimics human clicking the link) ──
+                            full_text = _read_page(url, body)
+                            if not full_text.strip():
+                                full_text = title  # last resort
+
+                            art_id = f"LIVE_{q['label'].upper()}_{len(raw_articles)}"
+                            raw_articles.append({
+                                "id":               art_id,
+                                "entity_name":      query_name,
+                                "article_title":    title,
+                                "article_text":     full_text[:4000],
+                                "source":           url,
+                                "published_date":   _normalise_date(r.get("date")),
+                                "category":         q["category"],
+                                "severity_label":   q["severity_label"],
+                                "country":          r.get("source", "Unknown"),
+                                "is_negative_news": q["is_negative"],
+                                "_query_label":     q["label"],   # internal tag, stripped later
+                            })
+                            fetched_this_query += 1
+
+                        logger.info(
+                            f"[MediaRetrieval]   → {fetched_this_query} new articles collected "
+                            f"[{q['label']}]"
+                        )
+
+                    except Exception as exc:
+                        logger.warning(
+                            f"[MediaRetrieval] DDG query [{q['label']}] failed: {exc}"
+                        )
 
         except Exception as exc:
             logger.error(f"[MediaRetrieval] DDGS session error: {exc}")
 
+        # ── Wikipedia fallback ─────────────────────────────────────────────
         if not raw_articles:
-            logger.warning("[MediaRetrieval] No live articles retrieved.")
+            logger.warning(
+                "[MediaRetrieval] All DDG queries returned 0 hits — trying Wikipedia fallback..."
+            )
+            try:
+                import requests as _req
+                wiki_url = (
+                    f"https://en.wikipedia.org/api/rest_v1/page/summary/"
+                    f"{query_name.replace(' ', '_')}"
+                )
+                resp = _req.get(wiki_url, headers={"User-Agent": "SentryScreen/1.0"}, timeout=5)
+                if resp.status_code == 200:
+                    wiki_data = resp.json()
+                    title   = wiki_data.get("title", query_name)
+                    extract = wiki_data.get("extract", "")
+                    if extract:
+                        raw_articles.append({
+                            "id":               "LIVE_WIKI",
+                            "entity_name":      query_name,
+                            "article_title":    f"Wikipedia: {title}",
+                            "article_text":     extract[:4000],
+                            "source":           wiki_data.get("content_urls", {})
+                                                         .get("desktop", {})
+                                                         .get("page", wiki_url),
+                            "published_date":   now_str,
+                            "category":         "BACKGROUND_INFO",
+                            "severity_label":   "LOW",
+                            "country":          "Global",
+                            "is_negative_news": False,
+                            "_query_label":     "wikipedia_fallback",
+                        })
+            except Exception as exc:
+                logger.warning(f"[MediaRetrieval] Wikipedia fallback failed: {exc}")
+
+        if not raw_articles:
+            logger.warning("[MediaRetrieval] No live articles retrieved even with fallback.")
             return []
 
-        logger.info(f"[MediaRetrieval] Scoring {len(raw_articles)} live articles...")
+        logger.info(
+            f"[MediaRetrieval] Scoring {len(raw_articles)} live articles "
+            f"({sum(1 for a in raw_articles if a.get('is_negative_news'))} tagged negative)..."
+        )
 
-        # Encode all article texts
+        # ── Semantic scoring ───────────────────────────────────────────────
         encode_texts = [
             f"{a['article_title']} {a['article_text'][:400]}"
             for a in raw_articles
@@ -334,7 +474,7 @@ class MediaRetrievalAgent:
             show_progress_bar=False,
         ).astype(np.float32)
 
-        # Query vector — use entity name + aliases for richer signal
+        # Query vector — entity name + aliases for richer signal
         query_parts  = [query_name] + aliases[:3]
         query_text   = " ".join(dict.fromkeys(query_parts))
         q_vec = self.model.encode(
@@ -350,11 +490,15 @@ class MediaRetrievalAgent:
         for i, art in enumerate(raw_articles):
             score = float(np.dot(q_vec, art_vecs[i]))
             if score >= live_threshold:
-                results.append((art, round(score, 6)))
+                # Strip internal _query_label before handing off
+                clean_art = {k: v for k, v in art.items() if k != "_query_label"}
+                results.append((clean_art, round(score, 6)))
 
         results.sort(key=lambda x: x[1], reverse=True)
+        neg_count = sum(1 for a, _ in results if a.get("is_negative_news"))
         logger.info(
-            f"[MediaRetrieval] Live results: {len(results)} above threshold={live_threshold:.3f}"
+            f"[MediaRetrieval] Live results: {len(results)} above threshold={live_threshold:.3f} "
+            f"({neg_count} negative-tagged)"
         )
         return results[:top_k]
 

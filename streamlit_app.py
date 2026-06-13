@@ -382,10 +382,11 @@ with tab_screen:
                         ey = cy - r * math.sin(theta)
                         
                         bk = {
-                            "Relevance":  (breakdown.get("relevance_component",  0)/35, "#ba1826"),
-                            "Severity":   (breakdown.get("severity_component",   0)/25, "#dc2626"),
-                            "Frequency":  (breakdown.get("frequency_component",  0)/25, "#fca5a5"),
-                            "Recency":    (breakdown.get("recency_component",    0)/15, "#ef4444"),
+                            "Relevance":  (breakdown.get("relevance_component",  0)/30, "#ba1826"),
+                            "Severity":   (breakdown.get("severity_component",   0)/22, "#dc2626"),
+                            "Frequency":  (breakdown.get("frequency_component",  0)/20, "#fca5a5"),
+                            "Recency":    (breakdown.get("recency_component",    0)/13, "#ef4444"),
+                            "Sentiment":  (breakdown.get("sentiment_component",  0)/15, "#f59e0b"),
                         }
                         breakdown_rows = "".join(
                             f"""<div style="margin-bottom:0.5rem;">
@@ -476,6 +477,90 @@ with tab_screen:
                             </div>
                             """, unsafe_allow_html=True)
                             
+                    # ── Negative News Section ──
+                    neg_articles = [
+                        a for a in articles if a.get("is_negative_news", False)
+                    ]
+                    neg_count = len(neg_articles)
+                    
+                    st.markdown(f"""
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin:2rem 0 1rem;">
+                        <div style="font-family:'Fira Code',monospace;font-size:0.75rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:#f59e0b;">⚠️ RECENT NEGATIVE NEWS FOR {entity['resolved_name'].upper()}</div>
+                        <div style="font-family:'Fira Code',monospace;font-size:0.8rem;color:#fcd34d;"
+                        >{neg_count} ARTICLE{'S' if neg_count != 1 else ''} FLAGGED</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    if neg_count == 0:
+                        st.markdown("""
+                        <div style='font-family:"Fira Code",monospace;font-size:0.8rem;
+                             color:#4ade80;padding:0.75rem 1rem;
+                             background:rgba(34,197,94,0.06);border:1px solid rgba(34,197,94,0.2);
+                             border-radius:8px;'>
+                            ✔ No recent negative news detected for this entity.
+                        </div>
+                        """, unsafe_allow_html=True)
+                    else:
+                        for neg_art in neg_articles:
+                            sev_n   = neg_art.get("severity_label", "LOW").upper()
+                            title_n = neg_art.get("article_title", "Untitled")
+                            src_n   = neg_art.get("source", "")
+                            date_n  = (neg_art.get("published_date") or "")[:10] or "Unknown date"
+                            body_n  = neg_art.get("article_text", "")
+                            sent_n  = neg_art.get("sentiment_score", 0.0)
+                            sent_pct = min(100, sent_n * 100)
+                            
+                            # Sentiment bar colour: green=low, amber=mid, red=high
+                            if sent_n >= 0.70:
+                                sent_clr = "#ef4444"
+                                sent_lbl = "HIGH NEGATIVE"
+                            elif sent_n >= 0.45:
+                                sent_clr = "#f59e0b"
+                                sent_lbl = "MODERATE NEGATIVE"
+                            else:
+                                sent_clr = "#fcd34d"
+                                sent_lbl = "LOW NEGATIVE"
+                            
+                            with st.expander(
+                                f"⚠️ {sev_n} | SENTIMENT: {sent_pct:.0f}% | {title_n}",
+                                expanded=False,
+                            ):
+                                st.markdown(f"""
+                                <div style="margin-bottom:0.8rem;font-family:'Fira Code',monospace;font-size:0.75rem;color:#fca5a5;">
+                                    DATE: <span style="color:#f8fafc;">{date_n}</span>
+                                    &nbsp;|&nbsp;
+                                    SOURCE: <a href="{src_n}" target="_blank"
+                                        style="color:#fcd34d;text-decoration:none;">{src_n[:80]}</a>
+                                </div>
+                                <div style="margin-bottom:0.6rem;">
+                                    {sev_badge(sev_n)}
+                                    &nbsp;
+                                    <span class="badge" style="background:rgba(245,158,11,0.15);
+                                        color:#fcd34d;border:1px solid rgba(245,158,11,0.4);">
+                                        NEGATIVE NEWS
+                                    </span>
+                                </div>
+                                <div style="margin-bottom:0.5rem;font-family:'Fira Code',monospace;font-size:0.7rem;color:#f59e0b;">
+                                    SENTIMENT WEIGHT
+                                </div>
+                                <div style="display:flex;align-items:center;gap:0.75rem;margin-bottom:1rem;">
+                                    <div style="flex:1;background:#000;border:1px solid #333;height:8px;border-radius:4px;">
+                                        <div style="width:{sent_pct:.1f}%;height:100%;background:{sent_clr};border-radius:4px;"></div>
+                                    </div>
+                                    <span style="font-family:'Fira Code',monospace;font-size:0.75rem;
+                                        color:{sent_clr};min-width:5rem;">
+                                        {sent_n:.2f} — {sent_lbl}
+                                    </span>
+                                </div>
+                                <div style="font-size:0.8rem;color:#94a3b8;line-height:1.6;
+                                    background:#080808;padding:1rem;border:1px solid #333;
+                                    max-height:180px;overflow-y:auto;">
+                                    {body_n[:600]}{'...' if len(body_n) > 600 else ''}
+                                </div>
+                                """, unsafe_allow_html=True)
+                    
+                    st.markdown("<hr style='margin:2rem 0;'>", unsafe_allow_html=True)
+                    
                     # ── Human in the Loop ──
                     st.markdown("""<div class="ss-card-title-green" style="margin-top:2rem;">HUMAN-IN-THE-LOOP DECISION</div>""", unsafe_allow_html=True)
                     notes = st.text_area("ANALYST NOTES", placeholder="Document reasoning for decision...", height=100, key="analyst_notes")

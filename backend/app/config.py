@@ -120,11 +120,13 @@ TOP_K_RESULTS        = int(os.getenv("TOP_K_RESULTS", "15"))
 RELEVANCE_THRESHOLD  = float(os.getenv("RELEVANCE_THRESHOLD", "0.20"))
 
 # ── Risk Scoring Weights ──────────────────────────────────────────────────────
-#  Risk = 0.35*relevance + 0.25*severity + 0.25*frequency + 0.15*recency
-WEIGHT_RELEVANCE  = 0.35
-WEIGHT_SEVERITY   = 0.25
-WEIGHT_FREQUENCY  = 0.25
-WEIGHT_RECENCY    = 0.15
+#  Risk = 0.30*relevance + 0.22*severity + 0.20*frequency + 0.13*recency + 0.15*sentiment
+#  (sum = 1.00; sentiment dimension added, others rebalanced proportionally)
+WEIGHT_RELEVANCE  = 0.30
+WEIGHT_SEVERITY   = 0.22
+WEIGHT_FREQUENCY  = 0.20
+WEIGHT_RECENCY    = 0.13
+WEIGHT_SENTIMENT  = 0.15   # ← NEW: negative-sentiment weight
 
 RECENCY_HALF_LIFE_DAYS = 365   # 50 % decay after 1 year
 
@@ -133,6 +135,87 @@ SEVERITY_WEIGHTS: dict[str, float] = {
     "high":     0.75,
     "medium":   0.50,
     "low":      0.25,
+}
+
+# ── Zero-Shot Classification (Negative Sentiment) ─────────────────────────────
+# Lightweight NLI model used for zero-shot "is this negative news?" classification.
+# cross-encoder/nli-deberta-v3-small: ~184 MB, ~50ms/article on CPU.
+ZSC_MODEL = os.getenv("ZSC_MODEL", "cross-encoder/nli-deberta-v3-small")
+ZSC_ENABLED = os.getenv("ZSC_ENABLED", "true").lower() == "true"
+ZSC_NEGATIVE_LABEL    = "negative news about a company or person"
+ZSC_POSITIVE_LABEL    = "positive or neutral news about a company or person"
+ZSC_THRESHOLD         = float(os.getenv("ZSC_THRESHOLD", "0.50"))  # min score to flag as negative
+
+# ── Sentiment Keyword Clusters (fallback / augment ZSC) ───────────────────────
+# Weight = raw negative sentiment intensity (0.0 – 1.0).
+# Negative cluster: positive float  →  drives risk UP
+# Positive override: negative float →  dampens risk score
+SENTIMENT_KEYWORDS: dict[str, float] = {
+    # Workforce / operational
+    "layoffs":               0.60,
+    "mass layoffs":          0.70,
+    "job cuts":              0.60,
+    "workforce reduction":   0.60,
+    "retrenchment":          0.58,
+    "downsizing":            0.55,
+    # Financial distress
+    "bankruptcy":            0.90,
+    "insolvency":            0.90,
+    "chapter 11":            0.85,
+    "liquidation":           0.88,
+    "debt default":          0.80,
+    "credit downgrade":      0.70,
+    # Legal / regulatory
+    "lawsuit":               0.70,
+    "litigation":            0.68,
+    "sued":                  0.70,
+    "class action":          0.75,
+    "fine":                  0.70,
+    "penalty":               0.70,
+    "regulatory action":     0.72,
+    "sec investigation":     0.80,
+    "doj probe":             0.82,
+    "ftc investigation":     0.78,
+    "subpoena":              0.75,
+    # Crime / misconduct
+    "fraud":                 1.00,
+    "scam":                  0.95,
+    "embezzlement":          0.95,
+    "ponzi":                 1.00,
+    "corruption":            0.92,
+    "bribery":               0.90,
+    "money laundering":      0.95,
+    "arrested":              0.95,
+    "convicted":             1.00,
+    "indicted":              0.95,
+    "criminal charges":      0.95,
+    "whistleblower":         0.72,
+    "misconduct":            0.72,
+    "scandal":               0.68,
+    # Cyber / security
+    "hack":                  0.70,
+    "data breach":           0.72,
+    "cyberattack":           0.75,
+    "ransomware":            0.78,
+    "data leak":             0.70,
+    # Leadership
+    "ceo fired":             0.65,
+    "ceo ousted":            0.65,
+    "resignation":           0.50,
+    "controversy":           0.60,
+    # Product / safety
+    "recall":                0.55,
+    "defect":                0.50,
+    "product liability":     0.58,
+    # ── Positive overrides (dampen sentiment weight) ──
+    "record earnings":      -0.30,
+    "record profit":        -0.30,
+    "revenue growth":       -0.25,
+    "expansion":            -0.20,
+    "acquisition":          -0.15,
+    "partnership":          -0.15,
+    "award":                -0.20,
+    "promotion":            -0.10,
 }
 
 RISK_THRESHOLDS: dict[str, tuple[float, float]] = {

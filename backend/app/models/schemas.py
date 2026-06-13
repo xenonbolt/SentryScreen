@@ -90,13 +90,19 @@ class ArticleResult(BaseModel):
     keywords:       List[str]
     why_flagged:    str
     relevance_reason: str
+    sentiment_score: float = Field(default=0.0, ge=0.0, le=1.0,
+                                   description="Negative sentiment intensity (0=neutral, 1=max negative)")
+    is_negative_news: bool = Field(default=False,
+                                   description="True when article was retrieved via adverse/negative query or classified as negative by ZSC")
 
 
 class RiskBreakdown(BaseModel):
-    relevance_component:  float   # 0–35
-    severity_component:   float   # 0–25
-    frequency_component:  float   # 0–25
-    recency_component:    float   # 0–15
+    relevance_component:  float   # 0–30
+    severity_component:   float   # 0–22
+    frequency_component:  float   # 0–20
+    recency_component:    float   # 0–13
+    sentiment_component:  float = 0.0   # 0–15 (NEW)
+    negative_news_count:  int   = 0     # number of articles flagged as negative news
 
 
 class ExplainabilityReport(BaseModel):
