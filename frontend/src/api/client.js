@@ -21,8 +21,16 @@ export const BACKEND_PORT = 8000;
 //   http://localhost:8888/proxy/8000/  (Jupyter proxying to FastAPI on :8000)
 // We detect that pattern and prepend it to every /api call automatically.
 function detectApiBase() {
+  // 1. Explicit cross-origin override via Command Line
+  // e.g. VITE_API_BASE="https://notebooks.amd.com/.../proxy/8000/api" npm run dev
+  if (import.meta.env.VITE_API_BASE) {
+    // Trim trailing slashes to prevent //api issues
+    return import.meta.env.VITE_API_BASE.replace(/\/+$/, '');
+  }
+
   const { pathname, origin } = window.location;
 
+  // 2. Auto-detect if UI is hosted directly behind Jupyter proxy
   // Match /proxy/<any-port>/ or /user/xxx/proxy/<any-port>/
   const proxyMatch = pathname.match(/^(.*\/proxy\/\d+)\//);
   if (proxyMatch) {
@@ -30,7 +38,7 @@ function detectApiBase() {
     return `${origin}${proxyMatch[1]}/api`;
   }
 
-  // Standard Vite dev server: Vite proxies /api → http://localhost:8000/api
+  // 3. Standard Vite dev server: Vite proxies /api → http://localhost:8000/api
   // (configured in vite.config.js → server.proxy['/api'].target)
   return '/api';
 }
