@@ -52,6 +52,20 @@ npm run dev
 ```
 *The frontend UI will be accessible at **http://localhost:8501***
 
+#### Running the UI on a Remote Machine
+If the backend is hosted remotely (e.g. on a Jupyter Notebook proxy) and you want to run the React frontend on your local PC, you can inject the backend URL and your Jupyter Authentication Token via the command line to bypass the login wall.
+
+**Linux / macOS:**
+```bash
+VITE_API_BASE="https://notebooks.amd.com/your-workspace-id/proxy/8000/api" \
+VITE_JUPYTER_TOKEN="your_jupyter_token_here" \
+npm run dev
+```
+**Windows (PowerShell):**
+```powershell
+$env:VITE_API_BASE="https://notebooks.amd.com/your-workspace-id/proxy/8000/api"; $env:VITE_JUPYTER_TOKEN="your_jupyter_token_here"; npm run dev
+```
+
 ## Usage
 1. Enter an entity name (e.g., `Nexum Capital Partners`, `Viktor Dragan`, `Clean Corp`).
 2. The UI will display a comprehensive dashboard including:

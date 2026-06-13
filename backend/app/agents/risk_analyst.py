@@ -252,6 +252,15 @@ def analyze_risk(
             
         sev  = _severity_weight(sev_label)
 
+        # ── BENIGN DAMPENING ──
+        # If an article is purely benign (low severity background info or general news),
+        # its high relevance (being about the entity) and high recency (published today)
+        # shouldn't trigger an 'Adverse' Media risk. We suppress its risk factors.
+        if sev_label == "low":
+            rel *= 0.25
+            rec *= 0.25
+            sent *= 0.0
+
         contribution = (
             WEIGHT_RELEVANCE  * rel
             + WEIGHT_SEVERITY   * sev
@@ -261,6 +270,11 @@ def analyze_risk(
         ) * 100.0
 
         contribution = round(min(100.0, max(0.0, contribution)), 2)
+        
+        # Write the dampened values back so the UI Breakdown bars match the math
+        art["relevance_score_normalized"] = rel
+        art["recency_factor"] = rec
+        art["sentiment_score"] = sent
         enriched.append({
             **art,
             "sentiment_score":    sent,
