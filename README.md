@@ -83,3 +83,7 @@ $env:VITE_API_BASE="https://notebooks.amd.com/your-workspace-id/proxy/8000/api";
 streamlit run streamlit_app.py --server.port 8501 --server.enableCORS false --server.enableXsrfProtection false
 
 jupyter server list
+
+VITE_API_BASE="base_jupyter_url" \
+VITE_JUPYTER_TOKEN="access_token" \
+npm run dev

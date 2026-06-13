@@ -418,6 +418,57 @@ class MediaRetrievalAgent:
         except Exception as exc:
             logger.error(f"[MediaRetrieval] DDGS session error: {exc}")
 
+            logger.info("[MediaRetrieval] Falling back to googlesearch-python...")
+            try:
+                from googlesearch import search as google_search
+                for q in queries:
+                    logger.info(f"[MediaRetrieval] Google Query [{q['label']}]: \"{q['ddg_query']}\"")
+                    try:
+                        hits = list(google_search(q["ddg_query"], num_results=q["max_results"], advanced=True))
+                        logger.info(f"[MediaRetrieval]   → {len(hits)} raw hits from Google [{q['label']}]")
+                        
+                        fetched_this_query = 0
+                        for r in hits:
+                            if isinstance(r, str):
+                                url = r
+                                title = r
+                                body = ""
+                            else:
+                                url = getattr(r, 'url', str(r))
+                                title = getattr(r, 'title', url)
+                                body = getattr(r, 'description', "")
+                                
+                            if not title or url in seen_urls:
+                                continue
+                            seen_urls.add(url)
+                            
+                            full_text = _read_page(url, body)
+                            if not full_text.strip():
+                                full_text = title
+                                
+                            art_id = f"LIVE_GOOG_{q['label'].upper()}_{len(raw_articles)}"
+                            raw_articles.append({
+                                "id":               art_id,
+                                "entity_name":      query_name,
+                                "article_title":    title,
+                                "article_text":     full_text[:4000],
+                                "source":           url,
+                                "published_date":   now_str,
+                                "category":         q["category"],
+                                "severity_label":   q["severity_label"],
+                                "country":          "Unknown",
+                                "is_negative_news": q["is_negative"],
+                                "_query_label":     q["label"],
+                            })
+                            fetched_this_query += 1
+                        logger.info(f"[MediaRetrieval]   → {fetched_this_query} new articles collected (Google)")
+                    except Exception as exc_inner:
+                         logger.warning(f"[MediaRetrieval] Google query failed: {exc_inner}")
+            except ImportError:
+                 logger.error("[MediaRetrieval] googlesearch-python not installed. Add it to requirements.txt")
+            except Exception as exc_out:
+                 logger.error(f"[MediaRetrieval] Google search fallback failed: {exc_out}")
+
         # ── Wikipedia fallback ─────────────────────────────────────────────
         if not raw_articles:
             logger.warning(

@@ -121,7 +121,7 @@ export default function App() {
     loadDbStats();
     const hw = setInterval(() => {
       loadHardware();
-    }, 1000);
+    }, 60000);
     return () => clearInterval(hw);
   }, []);
 
@@ -817,6 +817,15 @@ export default function App() {
                                     {art.why_flagged}
                                   </div>
                                 )}
+                                {art.evidence_quotes?.length > 0 && (
+                                  <div className="mt-2 space-y-2">
+                                    {art.evidence_quotes.map((quote, idx) => (
+                                      <div key={idx} className="border-l-2 border-emerald-500/50 pl-3 py-1 bg-emerald-950/10 text-emerald-300/90 text-[11px] italic">
+                                        "{quote}"
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           );
@@ -891,6 +900,18 @@ export default function App() {
                                     </span>
                                     <p className="text-[11px] text-slate-400 leading-relaxed">{art.relevance_reason || 'Semantically matched.'}</p>
                                   </div>
+                                </div>
+                              )}
+                              {art.evidence_quotes?.length > 0 && (
+                                <div className="mt-3 space-y-2">
+                                  <span className="text-[10px] font-bold text-emerald-400 uppercase tracking-wide flex items-center gap-1 mb-1">
+                                    <FileText className="w-3.5 h-3.5" />EVIDENCE EXTRACTED
+                                  </span>
+                                  {art.evidence_quotes.map((quote, idx) => (
+                                    <div key={idx} className="border-l-2 border-emerald-500/50 pl-3 py-1.5 bg-emerald-950/10 text-emerald-300/90 text-[11px] italic font-serif">
+                                      "{quote}"
+                                    </div>
+                                  ))}
                                 </div>
                               )}
                               {art.keywords?.length > 0 && (

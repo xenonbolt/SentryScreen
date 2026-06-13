@@ -87,6 +87,33 @@ def _extract_keywords(text: str, top_n: int = 8) -> List[str]:
     return found[:top_n]
 
 
+def _extract_evidence_quotes(text: str, keywords: List[str], max_quotes: int = 2) -> List[str]:
+    """
+    Extract up to max_quotes sentences from the text that contain any of the risk keywords.
+    """
+    if not keywords or not text:
+        return []
+    
+    # Simple sentence splitting by period followed by space
+    sentences = [s.strip() + "." for s in text.split(". ") if s.strip()]
+    quotes: List[str] = []
+    seen_quotes: set[str] = set()
+    
+    keyword_lower = [kw.lower() for kw in keywords]
+    
+    for sentence in sentences:
+        s_lower = sentence.lower()
+        if any(kw in s_lower for kw in keyword_lower):
+            if len(sentence) > 20 and sentence not in seen_quotes:
+                quotes.append(sentence)
+                seen_quotes.add(sentence)
+            if len(quotes) >= max_quotes:
+                break
+                
+    return quotes
+
+
+
 # ── Per-article explanations ──────────────────────────────────────────────────
 
 def _relevance_reason(article: Dict[str, Any], entity_name: str) -> str:
@@ -223,11 +250,14 @@ def explain(
     all_keywords: List[str] = []
 
     for art in articles:
-        kws   = _extract_keywords(art.get("article_title", "") + " " + art.get("article_text", ""))
+        full_text = art.get("article_title", "") + ". " + art.get("article_text", "")
+        kws   = _extract_keywords(full_text)
+        evidence = _extract_evidence_quotes(full_text, kws)
         all_keywords.extend(kws)
         enriched.append({
             **art,
             "keywords":        kws,
+            "evidence_quotes": evidence,
             "why_flagged":     _why_flagged(art),
             "relevance_reason": _relevance_reason(art, entity_name),
         })

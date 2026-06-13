@@ -88,6 +88,7 @@ class ArticleResult(BaseModel):
     relevance_score:  float
     risk_contribution: float
     keywords:       List[str]
+    evidence_quotes: List[str] = Field(default_factory=list)
     why_flagged:    str
     relevance_reason: str
     sentiment_score: float = Field(default=0.0, ge=0.0, le=1.0,
