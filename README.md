@@ -81,3 +81,5 @@ $env:VITE_API_BASE="https://notebooks.amd.com/your-workspace-id/proxy/8000/api";
 - Device detection is surfaced in the UI footer.
 
 streamlit run streamlit_app.py --server.port 8501 --server.enableCORS false --server.enableXsrfProtection false
+
+jupyter server list

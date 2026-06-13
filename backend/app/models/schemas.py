@@ -150,6 +150,10 @@ class HealthResponse(BaseModel):
     model_loaded:  bool
     dataset_size:  int
     version:       str
+    vram_usage:    Optional[int] = None
+    compute_load:  Optional[int] = None
+    cpu_usage:     Optional[int] = None
+    ram_usage:     Optional[int] = None
 
 
 class DatasetStats(BaseModel):

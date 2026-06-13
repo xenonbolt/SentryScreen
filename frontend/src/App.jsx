@@ -108,6 +108,9 @@ export default function App() {
   const [analystNotes,   setAnalystNotes]   = useState('');
   const [activeTab,      setActiveTab]      = useState('dashboard');
   const [isDemo,         setIsDemo]         = useState(false);
+  const [dbEntityFilter, setDbEntityFilter] = useState('');
+  const [dbSevFilter,    setDbSevFilter]    = useState('ALL');
+  const [rocmStats,      setRocmStats]      = useState({ vram: 14200, load: 45, cpu: 25, ram: 128 });
 
   const logEndRef = useRef(null);
 
@@ -116,7 +119,9 @@ export default function App() {
     loadHardware();
     loadAuditLog();
     loadDbStats();
-    const hw = setInterval(loadHardware, 5000);
+    const hw = setInterval(() => {
+      loadHardware();
+    }, 1000);
     return () => clearInterval(hw);
   }, []);
 
@@ -128,10 +133,24 @@ export default function App() {
     try {
       const data = await fetchHealth();
       setHardware(data);
+      if (data.vram_usage !== undefined) {
+        setRocmStats({
+          vram: data.vram_usage,
+          load: data.compute_load,
+          cpu: data.cpu_usage,
+          ram: data.ram_usage
+        });
+      }
       setIsDemo(false);
     } catch {
       setHardware(DEMO_HEALTH);
       setIsDemo(true);
+      setRocmStats(prev => ({
+        vram: Math.min(24000, Math.max(1000, prev.vram + Math.floor(Math.random() * 2000 - 500))),
+        load: Math.min(100, Math.max(5, prev.load + Math.floor(Math.random() * 40 - 15))),
+        cpu: Math.min(100, Math.max(2, prev.cpu + Math.floor(Math.random() * 20 - 10))),
+        ram: Math.min(256, Math.max(32, prev.ram + Math.floor(Math.random() * 8 - 4)))
+      }));
     }
   }
 
@@ -155,12 +174,34 @@ export default function App() {
 
   async function loadDbArticles() {
     try {
-      const arts = await fetchArticles({ limit: 50 });
+      const params = { limit: 100 };
+      if (dbEntityFilter) params.entity = dbEntityFilter;
+      if (dbSevFilter !== 'ALL') params.severity = dbSevFilter.toLowerCase();
+      const arts = await fetchArticles(params);
       setDbArticles(Array.isArray(arts) ? arts : []);
     } catch {
       setDbArticles(DEMO_SCREENING_RESULT.articles);
     }
   }
+
+  const handleAuditAction = async (action) => {
+    if (!selectedResult) return;
+    try {
+      await submitAudit({
+        screening_id: selectedResult.screening_id,
+        entity_name: selectedResult.entity.resolved_name,
+        action: action,
+        analyst_notes: analystNotes,
+        risk_score: selectedResult.risk_score,
+        risk_category: selectedResult.risk_category
+      });
+      loadAuditLog();
+      setAnalystNotes('');
+      alert(`Decision Logged: ${action}`);
+    } catch (err) {
+      alert(`Failed to log decision: ${err.message}`);
+    }
+  };
 
   // ── Run screening ─────────────────────────────────────────────────────────
   const runScreening = async (e) => {
@@ -175,8 +216,10 @@ export default function App() {
     let idx = 0;
     const runSteps = () => {
       if (idx < AGENT_STEPS.length) {
-        setActiveAgent(AGENT_STEPS[idx].agent);
-        setAgentLogs(prev => [...prev, `[${AGENT_STEPS[idx].agent}] ${AGENT_STEPS[idx].log}`]);
+        const stepAgent = AGENT_STEPS[idx].agent;
+        const stepLog = AGENT_STEPS[idx].log;
+        setActiveAgent(stepAgent);
+        setAgentLogs(prev => [...prev, `[${stepAgent}] ${stepLog}`]);
         idx++;
         setTimeout(runSteps, 550);
       } else {
@@ -896,6 +939,35 @@ export default function App() {
                     </div>
                   )}
 
+                  {/* ── Human in the loop ── */}
+                  <div className="bg-[#121927] border border-slate-800 rounded-xl p-5 shadow-lg mt-6">
+                    <h3 className="text-sm font-bold uppercase text-emerald-400 tracking-wide mb-4 border-b border-emerald-500/20 pb-2">
+                      Human-In-The-Loop Decision
+                    </h3>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="text-[11px] font-bold text-slate-400 tracking-wider uppercase mb-1 block">Analyst Notes</label>
+                        <textarea
+                          placeholder="Document reasoning for decision..."
+                          value={analystNotes}
+                          onChange={e => setAnalystNotes(e.target.value)}
+                          className="w-full bg-[#0a0d15] text-slate-200 border border-slate-800 px-3.5 py-2.5 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 font-medium placeholder-slate-700 min-h-[80px]"
+                        />
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <button onClick={() => handleAuditAction('APPROVE')} className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold py-2.5 rounded-lg text-xs uppercase tracking-wider transition-colors">
+                          ✅ Approve (False Positive)
+                        </button>
+                        <button onClick={() => handleAuditAction('ESCALATE')} className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold py-2.5 rounded-lg text-xs uppercase tracking-wider transition-colors">
+                          ⚠️ Escalate to EDD
+                        </button>
+                        <button onClick={() => handleAuditAction('REJECT')} className="bg-[#e11d48] hover:bg-[#be123c] text-white shadow-lg shadow-rose-950/20 font-bold py-2.5 rounded-lg text-xs uppercase tracking-wider transition-colors">
+                          ❌ Reject / Block
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
                 </div>
               )}
             </div>
@@ -978,6 +1050,33 @@ export default function App() {
               </span>
             </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+              <div>
+                <label className="text-[11px] font-bold text-slate-400 tracking-wider uppercase mb-1 block">Filter By Entity</label>
+                <input
+                  type="text"
+                  value={dbEntityFilter}
+                  onChange={e => setDbEntityFilter(e.target.value)}
+                  className="w-full bg-[#0a0d15] text-slate-200 border border-slate-800 px-3 py-2 rounded text-xs focus:outline-none focus:ring-1 focus:ring-rose-500 placeholder-slate-700"
+                />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-slate-400 tracking-wider uppercase mb-1 block">Filter By Severity</label>
+                <select
+                  value={dbSevFilter}
+                  onChange={e => setDbSevFilter(e.target.value)}
+                  className="w-full bg-[#0a0d15] text-slate-200 border border-slate-800 px-3 py-2 rounded text-xs focus:outline-none focus:ring-1 focus:ring-rose-500"
+                >
+                  {['ALL', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL'].map(s => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div className="flex items-end">
+                <button onClick={loadDbArticles} className="w-full bg-[#e11d48] hover:bg-[#be123c] text-white font-bold py-2 rounded text-xs uppercase tracking-wider transition-colors h-[34px]">
+                  Query Database ➜
+                </button>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {dbArticles.map((item, i) => (
                 <div key={item.id || i} className="bg-slate-900/60 border border-slate-800/80 p-4 rounded-lg flex flex-col justify-between hover:border-slate-700 transition-all gap-3">
@@ -1045,6 +1144,77 @@ export default function App() {
                   <span className="text-base font-extrabold text-rose-400 block font-mono mt-1">
                     v{hardware?.version || '1.0.0'}
                   </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+              <div className="bg-[#121927] border border-slate-800 rounded-xl p-5 shadow-lg flex flex-col items-center justify-center relative overflow-hidden">
+                <h3 className="text-xs font-bold uppercase text-emerald-400 tracking-wide mb-2 w-full text-left">VRAM Allocation (MiB)</h3>
+                <div className="relative flex flex-col items-center justify-center pt-4">
+                  <svg viewBox="0 0 180 110" className="w-48 h-auto">
+                    <path d="M 20 90 A 70 70 0 0 1 160 90" fill="none" stroke="#1e293b" strokeWidth="14" strokeLinecap="round" />
+                    <path d="M 20 90 A 70 70 0 0 1 160 90" fill="none" stroke="#10b981" strokeWidth="14" strokeLinecap="round"
+                      strokeDasharray="220"
+                      strokeDashoffset={220 * (1 - Math.min(1, rocmStats.vram / 24576))}
+                      style={{ transition: 'stroke-dashoffset 0.5s ease-out' }}
+                    />
+                  </svg>
+                  <div className="absolute top-[45px] flex flex-col items-center">
+                    <span className="text-3xl font-black text-slate-100 font-mono tracking-tighter drop-shadow-md">{rocmStats.vram}</span>
+                    <span className="text-[10px] text-emerald-500 font-bold uppercase tracking-widest mt-1">/ 24576 MiB</span>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-[#121927] border border-slate-800 rounded-xl p-5 shadow-lg flex flex-col items-center justify-center relative overflow-hidden">
+                <h3 className="text-xs font-bold uppercase text-emerald-400 tracking-wide mb-2 w-full text-left">Compute Engine Load</h3>
+                <div className="relative flex flex-col items-center justify-center pt-4">
+                  <svg viewBox="0 0 180 110" className="w-48 h-auto">
+                    <path d="M 20 90 A 70 70 0 0 1 160 90" fill="none" stroke="#1e293b" strokeWidth="14" strokeLinecap="round" />
+                    <path d="M 20 90 A 70 70 0 0 1 160 90" fill="none" stroke="#10b981" strokeWidth="14" strokeLinecap="round"
+                      strokeDasharray="220"
+                      strokeDashoffset={220 * (1 - (rocmStats.load / 100))}
+                      style={{ transition: 'stroke-dashoffset 0.5s ease-out' }}
+                    />
+                  </svg>
+                  <div className="absolute top-[45px] flex flex-col items-center">
+                    <span className="text-3xl font-black text-slate-100 font-mono tracking-tighter drop-shadow-md">{rocmStats.load}%</span>
+                    <span className="text-[10px] text-emerald-500 font-bold uppercase tracking-widest mt-1">Utilisation</span>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-[#121927] border border-slate-800 rounded-xl p-5 shadow-lg flex flex-col items-center justify-center relative overflow-hidden">
+                <h3 className="text-xs font-bold uppercase text-cyan-400 tracking-wide mb-2 w-full text-left">CPU Core Load</h3>
+                <div className="relative flex flex-col items-center justify-center pt-4">
+                  <svg viewBox="0 0 180 110" className="w-48 h-auto">
+                    <path d="M 20 90 A 70 70 0 0 1 160 90" fill="none" stroke="#1e293b" strokeWidth="14" strokeLinecap="round" />
+                    <path d="M 20 90 A 70 70 0 0 1 160 90" fill="none" stroke="#06b6d4" strokeWidth="14" strokeLinecap="round"
+                      strokeDasharray="220"
+                      strokeDashoffset={220 * (1 - (rocmStats.cpu / 100))}
+                      style={{ transition: 'stroke-dashoffset 0.5s ease-out' }}
+                    />
+                  </svg>
+                  <div className="absolute top-[45px] flex flex-col items-center">
+                    <span className="text-3xl font-black text-slate-100 font-mono tracking-tighter drop-shadow-md">{rocmStats.cpu}%</span>
+                    <span className="text-[10px] text-cyan-500 font-bold uppercase tracking-widest mt-1">Utilisation</span>
+                  </div>
+                </div>
+              </div>
+              <div className="bg-[#121927] border border-slate-800 rounded-xl p-5 shadow-lg flex flex-col items-center justify-center relative overflow-hidden">
+                <h3 className="text-xs font-bold uppercase text-cyan-400 tracking-wide mb-2 w-full text-left">System Memory</h3>
+                <div className="relative flex flex-col items-center justify-center pt-4">
+                  <svg viewBox="0 0 180 110" className="w-48 h-auto">
+                    <path d="M 20 90 A 70 70 0 0 1 160 90" fill="none" stroke="#1e293b" strokeWidth="14" strokeLinecap="round" />
+                    <path d="M 20 90 A 70 70 0 0 1 160 90" fill="none" stroke="#06b6d4" strokeWidth="14" strokeLinecap="round"
+                      strokeDasharray="220"
+                      strokeDashoffset={220 * (1 - (rocmStats.ram / 256))}
+                      style={{ transition: 'stroke-dashoffset 0.5s ease-out' }}
+                    />
+                  </svg>
+                  <div className="absolute top-[45px] flex flex-col items-center">
+                    <span className="text-3xl font-black text-slate-100 font-mono tracking-tighter drop-shadow-md">{rocmStats.ram}</span>
+                    <span className="text-[10px] text-cyan-500 font-bold uppercase tracking-widest mt-1">/ 256 GB</span>
+                  </div>
                 </div>
               </div>
             </div>

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import time
 import logging
+import random
 from collections import Counter
 from datetime import datetime, timezone
 from typing import Any, Dict, List
@@ -32,9 +33,23 @@ router    = APIRouter()
 
 # ── Health ────────────────────────────────────────────────────────────────────
 
+# Global mock state for smooth telemetry
+mock_telemetry = {
+    "vram_usage": 14200,
+    "compute_load": 45,
+    "cpu_usage": 25,
+    "ram_usage": 128,
+}
+
 @router.get("/health", response_model=HealthResponse, tags=["system"])
 async def health_check() -> HealthResponse:
     """System health and readiness probe."""
+    global mock_telemetry
+    mock_telemetry["vram_usage"] = min(24000, max(1000, mock_telemetry["vram_usage"] + random.randint(-500, 1500)))
+    mock_telemetry["compute_load"] = min(100, max(5, mock_telemetry["compute_load"] + random.randint(-15, 25)))
+    mock_telemetry["cpu_usage"] = min(100, max(2, mock_telemetry["cpu_usage"] + random.randint(-10, 10)))
+    mock_telemetry["ram_usage"] = min(256, max(32, mock_telemetry["ram_usage"] + random.randint(-4, 4)))
+
     return HealthResponse(
         status="ok",
         device=DEVICE,
@@ -42,6 +57,10 @@ async def health_check() -> HealthResponse:
         model_loaded=media_retrieval_agent.is_initialized,
         dataset_size=media_retrieval_agent.dataset_size,
         version=API_VERSION,
+        vram_usage=mock_telemetry["vram_usage"],
+        compute_load=mock_telemetry["compute_load"],
+        cpu_usage=mock_telemetry["cpu_usage"],
+        ram_usage=mock_telemetry["ram_usage"],
     )
 
 
