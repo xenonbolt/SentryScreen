@@ -239,7 +239,7 @@ def analyze_risk(
         rec  = art.get("recency_factor", 0.50)
         sent = _compute_sentiment_weight(art)
 
-        # ── DYNAMIC FALSE POSITIVE MITIGATION ──
+        # ── DYNAMIC FALSE POSITIVE & GOOD NEWS MITIGATION ──
         # Live web searches blindly assign HIGH severity to any hit from an adverse query.
         # If NLP sentiment analysis strongly disagrees (score hits the 0.40 floor),
         # it is a benign article (e.g. Wikipedia) that ranked high on DuckDuckGo. Downgrade it.
@@ -250,26 +250,41 @@ def analyze_risk(
             art["category"] = "GENERAL_NEWS"
             art["is_negative_news"] = False
             
+        # Detect clearly positive/good news
+        is_good_news = False
+        if not art.get("is_negative_news") and sent <= 0.25:
+            sev_label = "low"
+            art["severity_label"] = "low"
+            art["category"] = "GOOD_NEWS"
+            is_good_news = True
+            
         sev  = _severity_weight(sev_label)
 
-        # ── BENIGN DAMPENING ──
-        # If an article is purely benign (low severity background info or general news),
-        # its high relevance (being about the entity) and high recency (published today)
-        # shouldn't trigger an 'Adverse' Media risk. We suppress its risk factors.
-        if sev_label == "low":
+        # ── BENIGN DAMPENING & GOOD NEWS ──
+        if is_good_news:
+            # Explicitly good news subtracts from its own risk contribution
+            contribution = - (rel * 25.0 + rec * 15.0)
+        elif sev_label == "low":
             rel *= 0.25
             rec *= 0.25
             sent *= 0.0
+            contribution = (
+                WEIGHT_RELEVANCE  * rel
+                + WEIGHT_SEVERITY   * sev
+                + WEIGHT_FREQUENCY  * freq_factor
+                + WEIGHT_RECENCY    * rec
+                + WEIGHT_SENTIMENT  * sent
+            ) * 100.0
+        else:
+            contribution = (
+                WEIGHT_RELEVANCE  * rel
+                + WEIGHT_SEVERITY   * sev
+                + WEIGHT_FREQUENCY  * freq_factor
+                + WEIGHT_RECENCY    * rec
+                + WEIGHT_SENTIMENT  * sent
+            ) * 100.0
 
-        contribution = (
-            WEIGHT_RELEVANCE  * rel
-            + WEIGHT_SEVERITY   * sev
-            + WEIGHT_FREQUENCY  * freq_factor
-            + WEIGHT_RECENCY    * rec
-            + WEIGHT_SENTIMENT  * sent
-        ) * 100.0
-
-        contribution = round(min(100.0, max(0.0, contribution)), 2)
+        contribution = round(min(100.0, max(-50.0, contribution)), 2)
         
         # Write the dampened values back so the UI Breakdown bars match the math
         art["relevance_score_normalized"] = rel
@@ -282,7 +297,7 @@ def analyze_risk(
             "risk_contribution":  contribution,
         })
 
-    # Sort by contribution descending
+    # Sort by contribution descending (good news with negative contribution goes to bottom)
     enriched.sort(key=lambda x: x["risk_contribution"], reverse=True)
 
     # Inverse-rank weighted aggregate
@@ -295,8 +310,12 @@ def analyze_risk(
     # Severity-based penalty bonus (escalates score for critical findings)
     critical_n = sum(1 for a in enriched if a.get("severity_label") == "critical")
     high_n     = sum(1 for a in enriched if a.get("severity_label") == "high")
+    good_n     = sum(1 for a in enriched if a.get("category") == "GOOD_NEWS")
+    
     bonus = min(12.0, critical_n * 4.0 + high_n * 1.5)
-    aggregate = round(min(100.0, aggregate + bonus), 2)
+    discount = min(20.0, good_n * 6.0)  # Up to 20 pts discount for strong good news
+    
+    aggregate = round(min(100.0, max(0.0, aggregate + bonus - discount)), 2)
 
     category = _classify(aggregate)
 
