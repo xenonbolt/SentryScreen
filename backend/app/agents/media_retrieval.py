@@ -178,13 +178,20 @@ class MediaRetrievalAgent:
                 continue
             seen_ids.add(art_id)
 
-            # Small boost when entity name appears literally in article
             entity_lower = article["entity_name"].lower()
             query_lower  = query_name.lower()
-            if (query_lower in entity_lower or entity_lower in query_lower or
-                    any(a.lower() in entity_lower for a in aliases)):
-                score = min(1.0, score * 1.15)
+            
+            is_match = (
+                query_lower in entity_lower or 
+                entity_lower in query_lower or
+                any(a.lower() in entity_lower for a in aliases)
+            )
+            
+            # If the article is about a completely different entity in the DB, skip it.
+            if not is_match:
+                continue
 
+            score = min(1.0, score * 1.15)
             results.append((article, round(float(score), 6)))
 
         results.sort(key=lambda x: x[1], reverse=True)
