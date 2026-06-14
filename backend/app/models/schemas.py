@@ -61,6 +61,7 @@ class AuditRequest(BaseModel):
     screening_id: str
     entity_name:  str
     source:       Optional[str] = None
+    article:      Optional[Dict[str, Any]] = None
     action:       AuditAction
     analyst_notes: Optional[str] = None
     risk_score:   float

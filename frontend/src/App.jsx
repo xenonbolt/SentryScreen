@@ -113,6 +113,8 @@ export default function App() {
   const [dbEntityFilter, setDbEntityFilter] = useState('');
   const [dbSevFilter, setDbSevFilter] = useState('ALL');
   const [rocmStats, setRocmStats] = useState({ vram: 14200, load: 45, cpu: 25, ram: 128 });
+  const [auditModalArticle, setAuditModalArticle] = useState(null);
+  const [auditModalNotes, setAuditModalNotes] = useState('');
 
   const logEndRef = useRef(null);
 
@@ -314,13 +316,14 @@ export default function App() {
   }
 
   async function submitArticleDecision(article, action) {
-    if (!selectedResult) return;
+    if (!selectedResult || !article) return;
     const payload = {
       screening_id: selectedResult.screening_id,
       entity_name: selectedResult.entity?.resolved_name || 'Unknown',
       source: article.source,
+      article: article,
       action,
-      analyst_notes: `Audited specific article: ${article.article_title}`,
+      analyst_notes: auditModalNotes || `Audited specific article: ${article.article_title}`,
       risk_score: article.risk_contribution || 0,
       risk_category: 'MEDIUM'
     };
@@ -328,6 +331,8 @@ export default function App() {
       await submitAudit(payload);
     } catch { /* demo mode — ignore */ }
     setAuditLog(prev => [{ ...payload, timestamp: new Date().toISOString() }, ...prev]);
+    setAuditModalArticle(null);
+    setAuditModalNotes('');
     alert(`Article audited as ${action}. It will be skipped in future screenings.`);
   }
 
@@ -882,9 +887,7 @@ export default function App() {
                                 )}
                                 
                                 <div className="flex gap-2 mt-3 pt-3 border-t border-slate-800/80">
-                                  <button onClick={() => submitArticleDecision(art, 'APPROVE')} className="text-[10px] uppercase font-bold tracking-wider px-3 py-1.5 rounded bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 transition-colors flex items-center gap-1"><CheckCircle className="w-3 h-3"/> Clear (Skip)</button>
-                                  <button onClick={() => submitArticleDecision(art, 'REJECT')} className="text-[10px] uppercase font-bold tracking-wider px-3 py-1.5 rounded bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/20 transition-colors flex items-center gap-1"><XCircle className="w-3 h-3"/> Reject (Skip)</button>
-                                  <button onClick={() => submitArticleDecision(art, 'ESCALATE')} className="text-[10px] uppercase font-bold tracking-wider px-3 py-1.5 rounded bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/20 transition-colors flex items-center gap-1"><AlertCircle className="w-3 h-3"/> Escalate</button>
+                                  <button onClick={() => setAuditModalArticle(art)} className="text-[10px] uppercase font-bold tracking-wider px-4 py-1.5 rounded bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 border border-indigo-500/20 transition-colors flex items-center gap-1.5"><FileText className="w-3.5 h-3.5"/> Audit Publication...</button>
                                 </div>
                               </div>
                             </div>
@@ -982,6 +985,10 @@ export default function App() {
                                   ))}
                                 </div>
                               )}
+                              
+                              <div className="flex gap-2 mt-3 pt-3 border-t border-slate-800/80">
+                                <button onClick={() => setAuditModalArticle(art)} className="text-[10px] uppercase font-bold tracking-wider px-4 py-1.5 rounded bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500/20 border border-indigo-500/20 transition-colors flex items-center gap-1.5"><FileText className="w-3.5 h-3.5"/> Audit Publication...</button>
+                              </div>
                             </div>
                           </div>
                         ))}
@@ -1329,6 +1336,50 @@ export default function App() {
         )}
 
       </main>
+
+      {/* ── AUDIT MODAL ── */}
+      {auditModalArticle && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-[#0b101a] border border-slate-700 w-full max-w-lg rounded-xl shadow-2xl overflow-hidden flex flex-col">
+            <div className="bg-[#121927] border-b border-slate-800 p-4 flex justify-between items-center">
+              <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+                <FileText className="w-4 h-4 text-cyan-400" />
+                Audit Publication
+              </h3>
+              <button onClick={() => { setAuditModalArticle(null); setAuditModalNotes(''); }} className="text-slate-400 hover:text-white transition-colors">
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-5 space-y-4">
+              <div>
+                <div className="text-[10px] text-slate-500 font-mono uppercase mb-1">Article Title</div>
+                <div className="text-sm text-amber-300 font-bold leading-snug">{auditModalArticle.article_title}</div>
+                <a href={auditModalArticle.source} target="_blank" rel="noreferrer" className="text-[11px] text-cyan-400/80 hover:text-cyan-300 truncate block mt-1">
+                  {auditModalArticle.source}
+                </a>
+              </div>
+              
+              <div>
+                <div className="text-[10px] text-slate-500 font-mono uppercase mb-1">Analyst Notes</div>
+                <textarea
+                  rows={3}
+                  placeholder="Rationale for skipping, case reference..."
+                  value={auditModalNotes}
+                  onChange={e => setAuditModalNotes(e.target.value)}
+                  className="w-full bg-[#070a0f] text-slate-200 border border-slate-800 p-2.5 rounded text-xs focus:outline-none focus:border-cyan-500 transition-colors"
+                />
+              </div>
+            </div>
+            
+            <div className="bg-[#0a0e16] p-4 border-t border-slate-800 flex justify-end gap-2">
+              <button onClick={() => submitArticleDecision(auditModalArticle, 'APPROVE')} className="text-xs uppercase font-bold tracking-wider px-4 py-2 rounded bg-emerald-600 hover:bg-emerald-500 text-white transition-colors flex items-center gap-1.5 shadow-lg shadow-emerald-900/20"><CheckCircle className="w-4 h-4"/> Approve (Skip)</button>
+              <button onClick={() => submitArticleDecision(auditModalArticle, 'REJECT')} className="text-xs uppercase font-bold tracking-wider px-4 py-2 rounded bg-rose-600 hover:bg-rose-500 text-white transition-colors flex items-center gap-1.5 shadow-lg shadow-rose-900/20"><XCircle className="w-4 h-4"/> Reject (Skip)</button>
+              <button onClick={() => submitArticleDecision(auditModalArticle, 'ESCALATE')} className="text-xs uppercase font-bold tracking-wider px-4 py-2 rounded bg-amber-600 hover:bg-amber-500 text-white transition-colors flex items-center gap-1.5 shadow-lg shadow-amber-900/20"><AlertCircle className="w-4 h-4"/> Escalate</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── FOOTER ── */}
       <footer className="border-t border-slate-800 bg-[#070b13] px-6 py-4 flex flex-col md:flex-row items-center justify-between text-xs text-slate-500 gap-4 mt-auto">

@@ -272,6 +272,7 @@ async def submit_audit(request: AuditRequest) -> Dict[str, str]:
     entry: Dict[str, Any] = {
         "screening_id": request.screening_id,
         "entity_name":  request.entity_name,
+        "source":       request.source,
         "action":       request.action.value,
         "analyst_notes": request.analyst_notes,
         "risk_score":   request.risk_score,
@@ -279,6 +280,11 @@ async def submit_audit(request: AuditRequest) -> Dict[str, str]:
         "timestamp":    datetime.now(timezone.utc).isoformat(),
     }
     append_audit_entry(entry)
+    
+    # If the UI sent the full article payload, explicitly add it to the Compliance DB
+    if request.article:
+        media_retrieval_agent.add_articles([request.article])
+        
     return {"status": "recorded", "screening_id": request.screening_id}
 
 

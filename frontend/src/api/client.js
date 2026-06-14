@@ -89,10 +89,10 @@ export async function screenEntity({ entity_name, top_k = 10, threshold = 0.15, 
 }
 
 /** Submit analyst decision */
-export async function submitAudit({ screening_id, entity_name, source, action, analyst_notes, risk_score, risk_category }) {
+export async function submitAudit({ screening_id, entity_name, source, article, action, analyst_notes, risk_score, risk_category }) {
   return request('/audit', {
     method: 'POST',
-    body: JSON.stringify({ screening_id, entity_name, source, action, analyst_notes, risk_score, risk_category }),
+    body: JSON.stringify({ screening_id, entity_name, source, article, action, analyst_notes, risk_score, risk_category }),
   });
 }
 

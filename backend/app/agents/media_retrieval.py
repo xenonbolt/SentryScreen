@@ -572,9 +572,8 @@ class MediaRetrievalAgent:
             f"({neg_count} negative-tagged)"
         )
         
-        # Persist these live articles so they are available in future sessions
-        clean_articles_to_add = [a for a, _ in results]
-        self.add_articles(clean_articles_to_add)
+        # NOTE: We no longer auto-persist these articles here.
+        # They will be explicitly persisted ONLY if an analyst audits them on the frontend.
         
         return results[:top_k]
 
