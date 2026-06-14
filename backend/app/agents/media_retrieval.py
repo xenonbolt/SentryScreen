@@ -133,6 +133,7 @@ class MediaRetrievalAgent:
         top_k: int = TOP_K_RESULTS,
         threshold: float = RELEVANCE_THRESHOLD,
         use_live_web: bool = False, search_engine: str = "duckduckgo",
+        audited_sources: set = None,
     ) -> List[Tuple[Dict[str, Any], float]]:
         """
         Find the top-K articles most semantically similar to the entity query.
@@ -151,7 +152,7 @@ class MediaRetrievalAgent:
             self.initialize()
 
         if use_live_web:
-            return self._retrieve_live_web(query_name, aliases, top_k, threshold, search_engine)
+            return self._retrieve_live_web(query_name, aliases, top_k, threshold, search_engine, audited_sources)
 
         # Compose a rich query string from the entity name and its aliases
         query_parts = [query_name] + aliases[:4]
@@ -191,6 +192,10 @@ class MediaRetrievalAgent:
             if not is_match:
                 continue
 
+            # Skip if source has been audited
+            if audited_sources and article.get("source") in audited_sources:
+                continue
+
             score = min(1.0, score * 1.15)
             results.append((article, round(float(score), 6)))
 
@@ -218,7 +223,7 @@ class MediaRetrievalAgent:
     # ── Live Web Scraping ──────────────────────────────────────────────────
 
     def _retrieve_live_web(
-        self, query_name: str, aliases: List[str], top_k: int, threshold: float, search_engine: str = "duckduckgo"
+        self, query_name: str, aliases: List[str], top_k: int, threshold: float, search_engine: str = "duckduckgo", audited_sources: set = None
     ) -> List[Tuple[Dict[str, Any], float]]:
         """
         Mimics a human analyst Googling an entity in three passes:
@@ -551,6 +556,9 @@ class MediaRetrievalAgent:
 
         results: List[Tuple[Dict[str, Any], float]] = []
         for i, art in enumerate(raw_articles):
+            if audited_sources and art.get("source") in audited_sources:
+                continue
+
             score = float(np.dot(q_vec, art_vecs[i]))
             if score >= live_threshold:
                 # Strip internal _query_label before handing off
@@ -593,10 +601,10 @@ class MediaRetrievalAgent:
         
         # Append to json
         try:
-            with open(SYNTHETIC_DATA_FILE, "r") as f:
+            with open(DATASET_FILE, "r") as f:
                 data = json.load(f)
             data.extend(new_articles)
-            with open(SYNTHETIC_DATA_FILE, "w") as f:
+            with open(DATASET_FILE, "w") as f:
                 json.dump(data, f, indent=2)
             logger.info(f"[MediaRetrieval] Appended {len(new_articles)} live articles to dataset. FAISS updated.")
         except Exception as e:

@@ -59,8 +59,30 @@ async def telemetry() -> Dict[str, Any]:
     vram_usage = 14200
     compute_load = 45
     cpu_usage = int(psutil.cpu_percent())
-    ram = psutil.virtual_memory()
-    ram_usage_gb = int(ram.used / (1024**3))
+    ram_usage_gb = 0
+    try:
+        free_res = subprocess.run(["free", "-h"], capture_output=True, text=True, timeout=2)
+        if free_res.returncode == 0:
+            for line in free_res.stdout.split('\n'):
+                if line.startswith('Mem:'):
+                    parts = line.split()
+                    if len(parts) >= 3:
+                        used_str = parts[2]
+                        if 'Gi' in used_str:
+                            ram_usage_gb = int(float(used_str.replace('Gi', '')))
+                        elif 'G' in used_str:
+                            ram_usage_gb = int(float(used_str.replace('G', '')))
+                        elif 'Mi' in used_str:
+                            ram_usage_gb = max(1, int(float(used_str.replace('Mi', '')) / 1024))
+                        elif 'M' in used_str:
+                            ram_usage_gb = max(1, int(float(used_str.replace('M', '')) / 1024))
+                        else:
+                            ram_usage_gb = int(float(''.join(filter(str.isdigit, used_str))))
+    except Exception as e:
+        logger.warning(f"Failed to fetch free -h telemetry: {e}")
+        # fallback
+        ram = psutil.virtual_memory()
+        ram_usage_gb = int(ram.used / (1024**3))
 
     try:
         res = subprocess.run(["amd-smi"], capture_output=True, text=True, timeout=2)
@@ -160,14 +182,8 @@ async def screen_entity(request: ScreeningRequest) -> ScreeningResponse:
         f"(conf={resolved.confidence:.2f})"
     )
 
-    from app.agents.decision import get_audited_entities
-    audited = get_audited_entities()
-    if request.entity_name.lower() in audited or resolved.resolved_name.lower() in audited:
-        logger.info(f"[Pipeline] Entity '{resolved.resolved_name}' already audited. Skipping.")
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Entity '{resolved.resolved_name}' has already been audited. Skipping screening.",
-        )
+    from app.agents.decision import get_audited_sources
+    audited_sources = get_audited_sources()
 
     # ── Step 2: Adverse Media Retrieval ──────────────────────────────────
     s2 = time.perf_counter()
@@ -178,6 +194,7 @@ async def screen_entity(request: ScreeningRequest) -> ScreeningResponse:
         threshold=request.threshold,
         use_live_web=request.use_live_web,
         search_engine=request.search_engine,
+        audited_sources=audited_sources,
     )
     t2 = (time.perf_counter() - s2) * 1000
     logger.info(

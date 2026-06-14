@@ -60,6 +60,7 @@ class ScreeningRequest(BaseModel):
 class AuditRequest(BaseModel):
     screening_id: str
     entity_name:  str
+    source:       Optional[str] = None
     action:       AuditAction
     analyst_notes: Optional[str] = None
     risk_score:   float

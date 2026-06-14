@@ -5,6 +5,7 @@
 * Demo mode auto-activates when the backend is unreachable.
 */
 
+import SearchEngineToggle from "./components/SearchEngineToggle";
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Shield, Search, Activity, Cpu, History, AlertTriangle,
@@ -312,6 +313,24 @@ export default function App() {
 
   }
 
+  async function submitArticleDecision(article, action) {
+    if (!selectedResult) return;
+    const payload = {
+      screening_id: selectedResult.screening_id,
+      entity_name: selectedResult.entity?.resolved_name || 'Unknown',
+      source: article.source,
+      action,
+      analyst_notes: `Audited specific article: ${article.article_title}`,
+      risk_score: article.risk_contribution || 0,
+      risk_category: 'MEDIUM'
+    };
+    try {
+      await submitAudit(payload);
+    } catch { /* demo mode — ignore */ }
+    setAuditLog(prev => [{ ...payload, timestamp: new Date().toISOString() }, ...prev]);
+    alert(`Article audited as ${action}. It will be skipped in future screenings.`);
+  }
+
   // ── Timeline data ─────────────────────────────────────────────────────────
   const timelineData = (() => {
     if (!selectedResult?.articles?.length) return [];
@@ -481,31 +500,11 @@ export default function App() {
                       Fires 3 Google-style DDG queries + reads full article content.
                     </p>
                     {webSearch && (
-                      <div className="pt-2 pl-6">
-                        <div className="flex items-center gap-4">
-                          <label className="flex items-center gap-2 cursor-pointer text-[11px] text-slate-300">
-                            <input
-                              type="radio"
-                              name="searchEngine"
-                              value="duckduckgo"
-                              checked={searchEngine === 'duckduckgo'}
-                              onChange={() => setSearchEngine('duckduckgo')}
-                              className="w-3 h-3 accent-rose-500"
-                            />
-                            DuckDuckGo
-                          </label>
-                          <label className="flex items-center gap-2 cursor-pointer text-[11px] text-slate-300">
-                            <input
-                              type="radio"
-                              name="searchEngine"
-                              value="google"
-                              checked={searchEngine === 'google'}
-                              onChange={() => setSearchEngine('google')}
-                              className="w-3 h-3 accent-rose-500"
-                            />
-                            Google Search
-                          </label>
-                        </div>
+                      <div className="pt-3 pl-6">
+                        <SearchEngineToggle 
+                          value={searchEngine} 
+                          onChange={setSearchEngine} 
+                        />
                       </div>
                     )}
                   </div>
@@ -881,6 +880,12 @@ export default function App() {
                                     ))}
                                   </div>
                                 )}
+                                
+                                <div className="flex gap-2 mt-3 pt-3 border-t border-slate-800/80">
+                                  <button onClick={() => submitArticleDecision(art, 'APPROVE')} className="text-[10px] uppercase font-bold tracking-wider px-3 py-1.5 rounded bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 border border-emerald-500/20 transition-colors flex items-center gap-1"><CheckCircle className="w-3 h-3"/> Clear (Skip)</button>
+                                  <button onClick={() => submitArticleDecision(art, 'REJECT')} className="text-[10px] uppercase font-bold tracking-wider px-3 py-1.5 rounded bg-rose-500/10 text-rose-400 hover:bg-rose-500/20 border border-rose-500/20 transition-colors flex items-center gap-1"><XCircle className="w-3 h-3"/> Reject (Skip)</button>
+                                  <button onClick={() => submitArticleDecision(art, 'ESCALATE')} className="text-[10px] uppercase font-bold tracking-wider px-3 py-1.5 rounded bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border border-amber-500/20 transition-colors flex items-center gap-1"><AlertCircle className="w-3 h-3"/> Escalate</button>
+                                </div>
                               </div>
                             </div>
                           );

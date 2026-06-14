@@ -186,3 +186,24 @@ def get_audited_entities() -> set[str]:
     except Exception as e:
         logger.error(f"Failed to read audit log: {e}")
     return audited
+
+def get_audited_sources() -> set[str]:
+    import os
+    audited = set()
+    try:
+        if not AUDIT_LOG_FILE.exists():
+            return audited
+        with open(AUDIT_LOG_FILE, "r") as f:
+            for line in f:
+                if not line.strip():
+                    continue
+                try:
+                    record = json.loads(line)
+                    src = record.get("source")
+                    if src:
+                        audited.add(src)
+                except:
+                    pass
+    except Exception as e:
+        logger.error(f"Failed to read audit log for sources: {e}")
+    return audited
