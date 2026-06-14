@@ -985,34 +985,6 @@ export default function App() {
                     </div>
                   )}
 
-                  {/* ── Human in the loop ── */}
-                  <div className="bg-[#121927] border border-slate-800 rounded-xl p-5 shadow-lg mt-6">
-                    <h3 className="text-sm font-bold uppercase text-emerald-400 tracking-wide mb-4 border-b border-emerald-500/20 pb-2">
-                      Human-In-The-Loop Decision
-                    </h3>
-                    <div className="space-y-4">
-                      <div>
-                        <label className="text-[11px] font-bold text-slate-400 tracking-wider uppercase mb-1 block">Analyst Notes</label>
-                        <textarea
-                          placeholder="Document reasoning for decision..."
-                          value={analystNotes}
-                          onChange={e => setAnalystNotes(e.target.value)}
-                          className="w-full bg-[#0a0d15] text-slate-200 border border-slate-800 px-3.5 py-2.5 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-emerald-500 font-medium placeholder-slate-700 min-h-[80px]"
-                        />
-                      </div>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <button onClick={() => handleAuditAction('APPROVE')} className="bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 font-bold py-2.5 rounded-lg text-xs uppercase tracking-wider transition-colors">
-                          ✅ Approve (False Positive)
-                        </button>
-                        <button onClick={() => handleAuditAction('ESCALATE')} className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold py-2.5 rounded-lg text-xs uppercase tracking-wider transition-colors">
-                          ⚠️ Escalate
-                        </button>
-                        <button onClick={() => handleAuditAction('REJECT')} className="bg-[#e11d48] hover:bg-[#be123c] text-white shadow-lg shadow-rose-950/20 font-bold py-2.5 rounded-lg text-xs uppercase tracking-wider transition-colors">
-                          ❌ Reject / Block
-                        </button>
-                      </div>
-                    </div>
-                  </div>
 
                 </div>
               )}
