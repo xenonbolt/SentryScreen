@@ -26,6 +26,11 @@ from app.data.generate_dataset import main as generate_dataset
 
 logger = logging.getLogger(__name__)
 
+class TelemetryFilter(logging.Filter):
+    def filter(self, record):
+        return "/api/telemetry" not in record.getMessage()
+
+logging.getLogger("uvicorn.access").addFilter(TelemetryFilter())
 
 # ── Lifespan ──────────────────────────────────────────────────────────────────
 
