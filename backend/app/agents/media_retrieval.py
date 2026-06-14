@@ -585,7 +585,6 @@ class MediaRetrievalAgent:
             show_progress_bar=False,
         ).astype(np.float32)
         self.index.add(new_vecs)
-        self.dataset_size = len(self.articles)
         
         # Append to json
         try:
