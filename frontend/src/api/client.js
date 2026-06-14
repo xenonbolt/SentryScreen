@@ -101,9 +101,14 @@ export async function fetchAuditLog(limit = 50) {
   return request(`/audit-log?limit=${limit}`);
 }
 
-/** Health + GPU stats */
+/** Health stats */
 export async function fetchHealth() {
   return request('/health');
+}
+
+/** Rapid telemetry (VRAM, CPU, Load) */
+export async function fetchTelemetry() {
+  return request('/telemetry');
 }
 
 /** Dataset stats */

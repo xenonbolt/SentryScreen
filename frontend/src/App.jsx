@@ -1,9 +1,9 @@
 /**
- * App.jsx — SentryScreen Adverse Media Copilot
- * Matches the design of /home/dwijo/Desktop/UI/src/App.tsx
- * API → FastAPI backend via Jupyter proxy or direct Vite dev proxy.
- * Demo mode auto-activates when the backend is unreachable.
- */
+* App.jsx — SentryScreen Adverse Media Copilot
+* Matches the design of /home/dwijo/Desktop/UI/src/App.tsx
+* API → FastAPI backend via Jupyter proxy or direct Vite dev proxy.
+* Demo mode auto-activates when the backend is unreachable.
+*/
 
 import React, { useState, useEffect, useRef } from 'react';
 import {
@@ -28,7 +28,7 @@ import { DEMO_SCREENING_RESULT, DEMO_HEALTH, DEMO_AUDIT_LOG } from './api/demoDa
 const getRiskColor = (cat) => {
   if (!cat) return 'text-slate-400 bg-slate-500/10 border-slate-500/20';
   const c = cat.toUpperCase();
-  if (c === 'HIGH')   return 'text-red-400 bg-red-500/10 border-red-500/20';
+  if (c === 'HIGH') return 'text-red-400 bg-red-500/10 border-red-500/20';
   if (c === 'MEDIUM') return 'text-amber-400 bg-amber-500/10 border-amber-500/20';
   return 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20';
 };
@@ -36,7 +36,7 @@ const getRiskColor = (cat) => {
 const getRiskStroke = (cat) => {
   if (!cat) return '#64748b';
   const c = cat.toUpperCase();
-  if (c === 'HIGH')   return '#ef4444';
+  if (c === 'HIGH') return '#ef4444';
   if (c === 'MEDIUM') return '#f59e0b';
   return '#10b981';
 };
@@ -44,8 +44,8 @@ const getRiskStroke = (cat) => {
 const getSeverityBadge = (label) => {
   const l = (label || '').toLowerCase();
   if (l === 'critical') return 'bg-rose-600/20 text-rose-300 border border-rose-500/30';
-  if (l === 'high')     return 'bg-red-500/20 text-red-300 border border-red-500/30';
-  if (l === 'medium')   return 'bg-amber-500/20 text-amber-300 border border-amber-500/30';
+  if (l === 'high') return 'bg-red-500/20 text-red-300 border border-red-500/30';
+  if (l === 'medium') return 'bg-amber-500/20 text-amber-300 border border-amber-500/30';
   return 'bg-slate-700/50 text-slate-300 border border-slate-600/30';
 };
 
@@ -76,41 +76,41 @@ function HighlightedText({ text, keywords = [] }) {
 
 // ── Agent pipeline steps ─────────────────────────────────────────────────────
 const AGENT_STEPS = [
-  { agent: 'Entity Resolver Agent',        log: 'Init: Received query, resolving candidate matches...' },
-  { agent: 'Entity Resolver Agent',        log: 'Comparing token distances & database mappings...' },
-  { agent: 'Adverse Media Retrieval',      log: 'Firing 3-query Google-style search (general + negative + adverse)...' },
-  { agent: 'Adverse Media Retrieval',      log: 'Reading full article content via newspaper3k...' },
-  { agent: 'Relevance Scoring Agent',      log: 'Computing SentenceTransformer embeddings on device...' },
-  { agent: 'Relevance Scoring Agent',      log: 'Evaluating cosine similarity vectors against FAISS index...' },
-  { agent: 'Sentiment Analysis (ZSC)',     log: 'Running zero-shot classification (nli-deberta-v3-small)...' },
-  { agent: 'Risk Analysis Agent',          log: 'Applying weighted formula: rel+sev+freq+recency+sentiment...' },
-  { agent: 'Explainability Agent',         log: 'Cataloging risk keywords and summaries...' },
-  { agent: 'Decision Agent',              log: 'Finalising risk tier and compliance directive...' },
+  { agent: 'Entity Resolver Agent', log: 'Init: Received query, resolving candidate matches...' },
+  { agent: 'Entity Resolver Agent', log: 'Comparing token distances & database mappings...' },
+  { agent: 'Adverse Media Retrieval', log: 'Firing 3-query Google-style search (general + negative + adverse)...' },
+  { agent: 'Adverse Media Retrieval', log: 'Reading full article content via newspaper3k...' },
+  { agent: 'Relevance Scoring Agent', log: 'Computing SentenceTransformer embeddings on device...' },
+  { agent: 'Relevance Scoring Agent', log: 'Evaluating cosine similarity vectors against FAISS index...' },
+  { agent: 'Sentiment Analysis (ZSC)', log: 'Running zero-shot classification (nli-deberta-v3-small)...' },
+  { agent: 'Risk Analysis Agent', log: 'Applying weighted formula: rel+sev+freq+recency+sentiment...' },
+  { agent: 'Explainability Agent', log: 'Cataloging risk keywords and summaries...' },
+  { agent: 'Decision Agent', log: 'Finalising risk tier and compliance directive...' },
 ];
 
 // ═══════════════════════════════════════════════════════════════════════════
 export default function App() {
   // ── State ─────────────────────────────────────────────────────────────────
-  const [entityName,     setEntityName]     = useState('');
-  const [customFocus,    setCustomFocus]    = useState('');
-  const [webSearch,      setWebSearch]      = useState(true);
-  const [loading,        setLoading]        = useState(false);
-  const [activeAgent,    setActiveAgent]    = useState('');
-  const [agentLogs,      setAgentLogs]      = useState([]);
-  const [apiError,       setApiError]       = useState(null);
+  const [entityName, setEntityName] = useState('');
+  const [customFocus, setCustomFocus] = useState('');
+  const [webSearch, setWebSearch] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [activeAgent, setActiveAgent] = useState('');
+  const [agentLogs, setAgentLogs] = useState([]);
+  const [apiError, setApiError] = useState(null);
 
   const [selectedResult, setSelectedResult] = useState(null);
-  const [history,        setHistory]        = useState([]);
-  const [hardware,       setHardware]       = useState(null);
-  const [dbStats,        setDbStats]        = useState(null);
-  const [dbArticles,     setDbArticles]     = useState([]);
-  const [auditLog,       setAuditLog]       = useState([]);
-  const [analystNotes,   setAnalystNotes]   = useState('');
-  const [activeTab,      setActiveTab]      = useState('dashboard');
-  const [isDemo,         setIsDemo]         = useState(false);
+  const [history, setHistory] = useState([]);
+  const [hardware, setHardware] = useState(null);
+  const [dbStats, setDbStats] = useState(null);
+  const [dbArticles, setDbArticles] = useState([]);
+  const [auditLog, setAuditLog] = useState([]);
+  const [analystNotes, setAnalystNotes] = useState('');
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [isDemo, setIsDemo] = useState(false);
   const [dbEntityFilter, setDbEntityFilter] = useState('');
-  const [dbSevFilter,    setDbSevFilter]    = useState('ALL');
-  const [rocmStats,      setRocmStats]      = useState({ vram: 14200, load: 45, cpu: 25, ram: 128 });
+  const [dbSevFilter, setDbSevFilter] = useState('ALL');
+  const [rocmStats, setRocmStats] = useState({ vram: 14200, load: 45, cpu: 25, ram: 128 });
 
   const logEndRef = useRef(null);
 
@@ -119,10 +119,21 @@ export default function App() {
     loadHardware();
     loadAuditLog();
     loadDbStats();
+    
+    // Fallback if telemetry fails
     const hw = setInterval(() => {
       loadHardware();
     }, 60000);
-    return () => clearInterval(hw);
+    
+    // Fast polling telemetry
+    const tel = setInterval(() => {
+      loadTelemetry();
+    }, 1000);
+    
+    return () => {
+      clearInterval(hw);
+      clearInterval(tel);
+    };
   }, []);
 
   useEffect(() => {
@@ -133,6 +144,17 @@ export default function App() {
     try {
       const data = await fetchHealth();
       setHardware(data);
+      setIsDemo(false);
+    } catch {
+      setHardware(DEMO_HEALTH);
+      setIsDemo(true);
+    }
+  }
+
+  async function loadTelemetry() {
+    try {
+      const { fetchTelemetry } = await import('./api/client');
+      const data = await fetchTelemetry();
       if (data.vram_usage !== undefined) {
         setRocmStats({
           vram: data.vram_usage,
@@ -141,12 +163,10 @@ export default function App() {
           ram: data.ram_usage
         });
       }
-      setIsDemo(false);
     } catch {
-      setHardware(DEMO_HEALTH);
-      setIsDemo(true);
+      // Mock fallback
       setRocmStats(prev => ({
-        vram: Math.min(24000, Math.max(1000, prev.vram + Math.floor(Math.random() * 2000 - 500))),
+        vram: Math.min(198000, Math.max(1000, prev.vram + Math.floor(Math.random() * 2000 - 500))),
         load: Math.min(100, Math.max(5, prev.load + Math.floor(Math.random() * 40 - 15))),
         cpu: Math.min(100, Math.max(2, prev.cpu + Math.floor(Math.random() * 20 - 10))),
         ram: Math.min(256, Math.max(32, prev.ram + Math.floor(Math.random() * 8 - 4)))
@@ -197,7 +217,12 @@ export default function App() {
       });
       loadAuditLog();
       setAnalystNotes('');
-      alert(`Decision Logged: ${action}`);
+      if (action === 'ESCALATE') {
+        alert("This has been escalated");
+      } else {
+        alert(`Decision Logged: ${action}`);
+      }
+
     } catch (err) {
       alert(`Failed to log decision: ${err.message}`);
     }
@@ -266,10 +291,10 @@ export default function App() {
     if (!selectedResult) return;
     const payload = {
       screening_id: selectedResult.screening_id,
-      entity_name:  selectedResult.entity?.resolved_name || 'Unknown',
+      entity_name: selectedResult.entity?.resolved_name || 'Unknown',
       action,
       analyst_notes: analystNotes,
-      risk_score:   selectedResult.risk_score,
+      risk_score: selectedResult.risk_score,
       risk_category: selectedResult.risk_category,
     };
     try {
@@ -279,6 +304,10 @@ export default function App() {
     setSelectedResult(updated);
     setHistory(prev => prev.map(s => s.screening_id === updated.screening_id ? updated : s));
     setAuditLog(prev => [{ ...payload, timestamp: new Date().toISOString() }, ...prev]);
+    if (action === 'ESCALATE') {
+      alert("This has been escalated");
+    }
+
   }
 
   // ── Timeline data ─────────────────────────────────────────────────────────
@@ -302,9 +331,9 @@ export default function App() {
   // ── Tabs ──────────────────────────────────────────────────────────────────
   const TABS = [
     { id: 'dashboard', label: 'SCREENING HUB' },
-    { id: 'audit',     label: `AUDIT LOGS (${auditLog.length})` },
-    { id: 'database',  label: `COMPLIANCE DATABASE (${dbStats?.total_articles || 0})` },
-    { id: 'hardware',  label: 'ROCM GPU DIAGNOSTICS' },
+    { id: 'audit', label: `AUDIT LOGS (${auditLog.length})` },
+    { id: 'database', label: `COMPLIANCE DATABASE (${dbStats?.total_articles || 0})` },
+    { id: 'hardware', label: 'ROCM GPU DIAGNOSTICS' },
   ];
 
   // ══════════════════════════════════════════════════════════════════════════
@@ -370,11 +399,10 @@ export default function App() {
             <button
               key={t.id}
               onClick={() => { setActiveTab(t.id); if (t.id === 'database') loadDbArticles(); if (t.id === 'audit') loadAuditLog(); }}
-              className={`px-4 py-2 rounded-lg text-xs font-semibold tracking-wide transition-all ${
-                activeTab === t.id
+              className={`px-4 py-2 rounded-lg text-xs font-semibold tracking-wide transition-all ${activeTab === t.id
                   ? 'bg-slate-800 text-white shadow-inner border-b-2 border-red-500'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/40'
-              }`}
+                }`}
             >
               {t.label}
             </button>
@@ -531,11 +559,10 @@ export default function App() {
                         <button
                           key={i}
                           onClick={() => setSelectedResult(item)}
-                          className={`w-full text-left p-3 rounded-lg border text-xs flex flex-col gap-1.5 transition-all ${
-                            selectedResult?.screening_id === item.screening_id
+                          className={`w-full text-left p-3 rounded-lg border text-xs flex flex-col gap-1.5 transition-all ${selectedResult?.screening_id === item.screening_id
                               ? 'bg-slate-800/70 border-slate-700'
                               : 'bg-[#0b101a] border-slate-800/50 hover:bg-slate-800/30'
-                          }`}
+                            }`}
                         >
                           <div className="flex justify-between items-center w-full">
                             <span className="font-bold text-slate-100 truncate max-w-[160px]">
@@ -598,10 +625,9 @@ export default function App() {
 
                     {/* Gauge (span 6) */}
                     <div className="md:col-span-6 bg-gradient-to-b from-[#162137] to-[#121927] border border-slate-800 rounded-xl p-5 shadow-lg flex flex-col justify-between relative overflow-hidden">
-                      <div className={`absolute top-0 left-0 right-0 h-1 ${
-                        selectedResult.risk_category === 'HIGH' ? 'bg-red-500' :
-                        selectedResult.risk_category === 'MEDIUM' ? 'bg-amber-500' : 'bg-emerald-500'
-                      }`} />
+                      <div className={`absolute top-0 left-0 right-0 h-1 ${selectedResult.risk_category === 'HIGH' ? 'bg-red-500' :
+                          selectedResult.risk_category === 'MEDIUM' ? 'bg-amber-500' : 'bg-emerald-500'
+                        }`} />
 
                       <div className="flex justify-between items-start mb-4">
                         <div>
@@ -637,11 +663,11 @@ export default function App() {
                         {/* Breakdown bars */}
                         <div className="flex-1 space-y-1.5">
                           {[
-                            { label: 'Relevance',  val: (selectedResult.risk_breakdown?.relevance_component  || 0) / 30, color: '#ba1826' },
-                            { label: 'Severity',   val: (selectedResult.risk_breakdown?.severity_component   || 0) / 22, color: '#dc2626' },
-                            { label: 'Frequency',  val: (selectedResult.risk_breakdown?.frequency_component  || 0) / 20, color: '#fca5a5' },
-                            { label: 'Recency',    val: (selectedResult.risk_breakdown?.recency_component    || 0) / 13, color: '#ef4444' },
-                            { label: 'Sentiment',  val: (selectedResult.risk_breakdown?.sentiment_component  || 0) / 15, color: '#f59e0b' },
+                            { label: 'Relevance', val: (selectedResult.risk_breakdown?.relevance_component || 0) / 30, color: '#ba1826' },
+                            { label: 'Severity', val: (selectedResult.risk_breakdown?.severity_component || 0) / 22, color: '#dc2626' },
+                            { label: 'Frequency', val: (selectedResult.risk_breakdown?.frequency_component || 0) / 20, color: '#fca5a5' },
+                            { label: 'Recency', val: (selectedResult.risk_breakdown?.recency_component || 0) / 13, color: '#ef4444' },
+                            { label: 'Sentiment', val: (selectedResult.risk_breakdown?.sentiment_component || 0) / 15, color: '#f59e0b' },
                           ].map(({ label, val, color }) => (
                             <div key={label}>
                               <div className="flex justify-between font-mono text-[9px] text-slate-400 mb-0.5">
@@ -713,12 +739,11 @@ export default function App() {
                       </div>
                       <div className="flex items-center gap-2 bg-slate-900 border border-slate-800 px-3 py-1 rounded text-[11px]">
                         <span className="text-slate-400">Audit State:</span>
-                        <span className={`font-bold px-2 py-0.5 rounded ${
-                          selectedResult._reviewStatus === 'APPROVE'  ? 'bg-emerald-500/20 text-emerald-400' :
-                          selectedResult._reviewStatus === 'REJECT'   ? 'bg-rose-500/20 text-rose-400' :
-                          selectedResult._reviewStatus === 'ESCALATE' ? 'bg-amber-500/20 text-amber-400' :
-                          'bg-slate-800 text-slate-400'
-                        }`}>
+                        <span className={`font-bold px-2 py-0.5 rounded ${selectedResult._reviewStatus === 'APPROVE' ? 'bg-emerald-500/20 text-emerald-400' :
+                            selectedResult._reviewStatus === 'REJECT' ? 'bg-rose-500/20 text-rose-400' :
+                              selectedResult._reviewStatus === 'ESCALATE' ? 'bg-amber-500/20 text-amber-400' :
+                                'bg-slate-800 text-slate-400'
+                          }`}>
                           {selectedResult._reviewStatus || 'PENDING'}
                         </span>
                       </div>
@@ -739,7 +764,7 @@ export default function App() {
                           <button onClick={() => submitDecision('APPROVE')} className="bg-emerald-600 hover:bg-emerald-700 text-white rounded font-bold text-[10px] py-1.5 uppercase transition-colors tracking-wider flex flex-col items-center justify-center gap-1 cursor-pointer">
                             <CheckCircle className="w-3.5 h-3.5" />Approve
                           </button>
-                          <button onClick={() => submitDecision('REJECT')}  className="bg-rose-600 hover:bg-rose-700 text-white rounded font-bold text-[10px] py-1.5 uppercase transition-colors tracking-wider flex flex-col items-center justify-center gap-1 cursor-pointer">
+                          <button onClick={() => submitDecision('REJECT')} className="bg-rose-600 hover:bg-rose-700 text-white rounded font-bold text-[10px] py-1.5 uppercase transition-colors tracking-wider flex flex-col items-center justify-center gap-1 cursor-pointer">
                             <XCircle className="w-3.5 h-3.5" />Reject
                           </button>
                           <button onClick={() => submitDecision('ESCALATE')} className="bg-amber-600 hover:bg-amber-700 text-white rounded font-bold text-[10px] py-1.5 uppercase transition-colors tracking-wider flex flex-col items-center justify-center gap-1 cursor-pointer">
@@ -797,7 +822,7 @@ export default function App() {
                                   <div className="flex items-center gap-3 text-[11px] text-slate-500 mt-1">
                                     <span className="flex items-center gap-1"><Building className="w-3 h-3" />{art.country}</span>
                                     <span className="h-3 w-px bg-slate-800" />
-                                    <span className="flex items-center gap-1 font-mono"><Calendar className="w-3 h-3" />{(art.published_date || '').slice(0,10)}</span>
+                                    <span className="flex items-center gap-1 font-mono"><Calendar className="w-3 h-3" />{(art.published_date || '').slice(0, 10)}</span>
                                     {art.source && (
                                       <>
                                         <span className="h-3 w-px bg-slate-800" />
@@ -878,7 +903,7 @@ export default function App() {
                                 <div className="flex items-center gap-3 text-[11px] text-slate-500 mt-1">
                                   <span className="flex items-center gap-1"><Building className="w-3 h-3" />{art.source}</span>
                                   <span className="h-3 w-px bg-slate-800" />
-                                  <span className="flex items-center gap-1 font-mono"><Calendar className="w-3 h-3" />{(art.published_date || '').slice(0,10)}</span>
+                                  <span className="flex items-center gap-1 font-mono"><Calendar className="w-3 h-3" />{(art.published_date || '').slice(0, 10)}</span>
                                   <span className="h-3 w-px bg-slate-800" />
                                   <span className="text-[10px] bg-indigo-500/10 text-indigo-400 px-2 rounded-full font-mono">{art.category}</span>
                                 </div>
@@ -980,7 +1005,7 @@ export default function App() {
                           ✅ Approve (False Positive)
                         </button>
                         <button onClick={() => handleAuditAction('ESCALATE')} className="bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 font-bold py-2.5 rounded-lg text-xs uppercase tracking-wider transition-colors">
-                          ⚠️ Escalate to EDD
+                          ⚠️ Escalate
                         </button>
                         <button onClick={() => handleAuditAction('REJECT')} className="bg-[#e11d48] hover:bg-[#be123c] text-white shadow-lg shadow-rose-950/20 font-bold py-2.5 rounded-lg text-xs uppercase tracking-wider transition-colors">
                           ❌ Reject / Block
@@ -1031,11 +1056,10 @@ export default function App() {
                         <td className="py-3 px-4 font-mono text-slate-400 text-[11px]">{new Date(log.timestamp).toLocaleString()}</td>
                         <td className="py-3 px-4 font-bold text-white">{log.entity_name}</td>
                         <td className="py-3 px-4">
-                          <span className={`px-2 py-0.5 text-[10px] rounded font-mono font-bold uppercase border ${
-                            log.action === 'APPROVE'  ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
-                            log.action === 'REJECT'   ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
-                            'bg-amber-500/10 text-amber-400 border-amber-500/20'
-                          }`}>{log.action}</span>
+                          <span className={`px-2 py-0.5 text-[10px] rounded font-mono font-bold uppercase border ${log.action === 'APPROVE' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                              log.action === 'REJECT' ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
+                                'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                            }`}>{log.action}</span>
                         </td>
                         <td className="py-3 px-4 font-mono font-bold text-white">{log.risk_score?.toFixed(1)}</td>
                         <td className="py-3 px-4">
@@ -1177,13 +1201,13 @@ export default function App() {
                     <path d="M 20 90 A 70 70 0 0 1 160 90" fill="none" stroke="#1e293b" strokeWidth="14" strokeLinecap="round" />
                     <path d="M 20 90 A 70 70 0 0 1 160 90" fill="none" stroke="#10b981" strokeWidth="14" strokeLinecap="round"
                       strokeDasharray="220"
-                      strokeDashoffset={220 * (1 - Math.min(1, rocmStats.vram / 24576))}
+                      strokeDashoffset={220 * (1 - Math.min(1, rocmStats.vram / 198000))}
                       style={{ transition: 'stroke-dashoffset 0.5s ease-out' }}
                     />
                   </svg>
                   <div className="absolute top-[45px] flex flex-col items-center">
                     <span className="text-3xl font-black text-slate-100 font-mono tracking-tighter drop-shadow-md">{rocmStats.vram}</span>
-                    <span className="text-[10px] text-emerald-500 font-bold uppercase tracking-widest mt-1">/ 24576 MiB</span>
+                    <span className="text-[10px] text-emerald-500 font-bold uppercase tracking-widest mt-1">/ 198000 MiB</span>
                   </div>
                 </div>
               </div>

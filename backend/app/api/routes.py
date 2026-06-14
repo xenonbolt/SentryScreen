@@ -33,23 +33,13 @@ router    = APIRouter()
 
 # ── Health ────────────────────────────────────────────────────────────────────
 
-# Global mock state for smooth telemetry
-mock_telemetry = {
-    "vram_usage": 14200,
-    "compute_load": 45,
-    "cpu_usage": 25,
-    "ram_usage": 128,
-}
+import subprocess
+import psutil
+import re
 
 @router.get("/health", response_model=HealthResponse, tags=["system"])
 async def health_check() -> HealthResponse:
     """System health and readiness probe."""
-    global mock_telemetry
-    mock_telemetry["vram_usage"] = min(24000, max(1000, mock_telemetry["vram_usage"] + random.randint(-500, 1500)))
-    mock_telemetry["compute_load"] = min(100, max(5, mock_telemetry["compute_load"] + random.randint(-15, 25)))
-    mock_telemetry["cpu_usage"] = min(100, max(2, mock_telemetry["cpu_usage"] + random.randint(-10, 10)))
-    mock_telemetry["ram_usage"] = min(256, max(32, mock_telemetry["ram_usage"] + random.randint(-4, 4)))
-
     return HealthResponse(
         status="ok",
         device=DEVICE,
@@ -57,11 +47,43 @@ async def health_check() -> HealthResponse:
         model_loaded=media_retrieval_agent.is_initialized,
         dataset_size=media_retrieval_agent.dataset_size,
         version=API_VERSION,
-        vram_usage=mock_telemetry["vram_usage"],
-        compute_load=mock_telemetry["compute_load"],
-        cpu_usage=mock_telemetry["cpu_usage"],
-        ram_usage=mock_telemetry["ram_usage"],
+        vram_usage=0,
+        compute_load=0,
+        cpu_usage=0,
+        ram_usage=0,
     )
+
+@router.get("/telemetry", tags=["system"])
+async def telemetry() -> Dict[str, Any]:
+    """Real-time system telemetry."""
+    vram_usage = 14200
+    compute_load = 45
+    cpu_usage = int(psutil.cpu_percent())
+    ram = psutil.virtual_memory()
+    ram_usage_gb = int(ram.used / (1024**3))
+
+    try:
+        res = subprocess.run(["amd-smi"], capture_output=True, text=True, timeout=2)
+        if res.returncode == 0:
+            mem_match = re.search(r'(\d+)/\d+\s+MB', res.stdout)
+            if mem_match:
+                vram_usage = int(mem_match.group(1))
+            
+            lines = res.stdout.split('\n')
+            for line in lines:
+                if 'SPX' in line or 'MB' in line:
+                    gfx_match = re.search(r'\|\s*(\d+)\s*%', line)
+                    if gfx_match:
+                        compute_load = int(gfx_match.group(1))
+    except Exception as e:
+        logger.warning(f"Failed to fetch amd-smi telemetry: {e}")
+
+    return {
+        "vram_usage": vram_usage,
+        "compute_load": compute_load,
+        "cpu_usage": cpu_usage,
+        "ram_usage": ram_usage_gb,
+    }
 
 
 # ── Dataset Stats ─────────────────────────────────────────────────────────────
@@ -137,6 +159,15 @@ async def screen_entity(request: ScreeningRequest) -> ScreeningResponse:
         f"'{request.entity_name}' → '{resolved.resolved_name}' "
         f"(conf={resolved.confidence:.2f})"
     )
+
+    from app.agents.decision import get_audited_entities
+    audited = get_audited_entities()
+    if request.entity_name.lower() in audited or resolved.resolved_name.lower() in audited:
+        logger.info(f"[Pipeline] Entity '{resolved.resolved_name}' already audited. Skipping.")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Entity '{resolved.resolved_name}' has already been audited. Skipping screening.",
+        )
 
     # ── Step 2: Adverse Media Retrieval ──────────────────────────────────
     s2 = time.perf_counter()

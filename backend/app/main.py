@@ -74,7 +74,9 @@ async def _request_logging_middleware(request: Request, call_next) -> Response:
     path   = request.url.path
     qs     = f"?{request.url.query}" if request.url.query else ""
 
-    logger.info(f"[{req_id}] ▶ {method} {path}{qs}")
+    is_telemetry = path.endswith("/telemetry")
+    if not is_telemetry:
+        logger.info(f"[{req_id}] ▶ {method} {path}{qs}")
 
     t0 = time.perf_counter()
     try:
@@ -100,9 +102,10 @@ async def _request_logging_middleware(request: Request, call_next) -> Response:
         log_fn = logger.error
         marker = "✗"
 
-    log_fn(
-        f"[{req_id}] {marker} {method} {path} → {status} ({elapsed_ms:.1f}ms)"
-    )
+    if not (is_telemetry and status == 200):
+        log_fn(
+            f"[{req_id}] {marker} {method} {path} → {status} ({elapsed_ms:.1f}ms)"
+        )
 
     # Propagate the request ID so clients can correlate logs
     response.headers["X-Request-ID"] = req_id

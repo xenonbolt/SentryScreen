@@ -267,14 +267,10 @@ def sev_badge(sev: str) -> str:
     s = sev.upper()
     return f'<span class="badge badge-{s}">{s}</span>'
 
-# Mock ROCm logic since backend doesn't provide VRAM/load
+# We no longer mock ROCm logic here since the backend provides real VRAM/load via /health
 if "vram_usage" not in st.session_state:
-    st.session_state.vram_usage = random.randint(4000, 16000)
-    st.session_state.compute_load = random.randint(15, 85)
-
-def update_rocm_stats():
-    st.session_state.vram_usage = min(24000, max(1000, st.session_state.vram_usage + random.randint(-500, 1500)))
-    st.session_state.compute_load = min(100, max(5, st.session_state.compute_load + random.randint(-15, 25)))
+    st.session_state.vram_usage = 0
+    st.session_state.compute_load = 0
 
 # ── Header ────────────────────────────────────────────────────────────────────
 st.markdown("""
@@ -337,7 +333,11 @@ with tab_screen:
                 )
                 
                 if res.status_code != 200:
-                    st.error(f"SYS_ERROR: {res.text}")
+                    try:
+                        err_detail = res.json().get("detail", res.text)
+                        st.error(f"Error: {err_detail}")
+                    except ValueError:
+                        st.error(f"SYS_ERROR: {res.text}")
                 else:
                     data       = res.json()
                     risk_cat   = data["risk_category"]
@@ -580,9 +580,9 @@ with tab_screen:
                             requests.post(f"{API_BASE}/audit", json={**audit_base, "action": "APPROVE"})
                             st.success("LOGGED: APPROVED")
                     with b2:
-                        if st.button("⚠️ ESCALATE TO EDD", use_container_width=True):
+                        if st.button("⚠️ Escalate", use_container_width=True):
                             requests.post(f"{API_BASE}/audit", json={**audit_base, "action": "ESCALATE"})
-                            st.warning("LOGGED: ESCALATED")
+                            st.warning("This has been escalated")
                     with b3:
                         if st.button("❌ REJECT / BLOCK", type="primary", use_container_width=True):
                             requests.post(f"{API_BASE}/audit", json={**audit_base, "action": "REJECT"})
@@ -658,13 +658,23 @@ with tab_comp:
 with tab_rocm:
     st.markdown("""<div class="ss-card-title-green">SYSTEM HEALTH & GPU TELEMETRY (AUTO-REFRESHING)</div>""", unsafe_allow_html=True)
     
+    @st.cache_data(ttl=60)
+    def fetch_cached_health():
+        return requests.get(f"{API_BASE}/health", timeout=5).json()
+
+    @st.cache_data(ttl=60)
+    def fetch_cached_stats():
+        return requests.get(f"{API_BASE}/dataset-stats", timeout=5).json()
+
     @st.fragment(run_every="1s")
     def render_rocm_telemetry():
-        update_rocm_stats()
-            
         try:
-            health = requests.get(f"{API_BASE}/health", timeout=5).json()
-            stats = requests.get(f"{API_BASE}/dataset-stats", timeout=5).json()
+            health = fetch_cached_health()
+            tel = requests.get(f"{API_BASE}/telemetry", timeout=5).json()
+            stats = fetch_cached_stats()
+            
+            st.session_state.vram_usage = tel.get("vram_usage", st.session_state.vram_usage)
+            st.session_state.compute_load = tel.get("compute_load", st.session_state.compute_load)
             
             r1, r2, r3, r4 = st.columns(4)
             r1.metric("API STATUS", health.get("status", "UNKNOWN").upper())
@@ -681,10 +691,10 @@ with tab_rocm:
                 <div class="ss-card" style="border-color: rgba(34,197,94,0.3);">
                     <div class="ss-card-title-green">VRAM ALLOCATION (MiB)</div>
                     <div style="font-family:'Fira Code',monospace;font-size:2.5rem;color:#f8fafc;font-weight:800;margin-bottom:1rem;">
-                        {st.session_state.vram_usage} <span style="font-size:1rem;color:#16a34a;">/ 24576</span>
+                        {st.session_state.vram_usage} <span style="font-size:1rem;color:#16a34a;">/ 198000</span>
                     </div>
                     <div style="background:#000;border:1px solid #333;height:12px;">
-                        <div style="width:{min(100, st.session_state.vram_usage/24576*100):.1f}%;height:100%;background:#22c55e;"></div>
+                        <div style="width:{min(100, st.session_state.vram_usage/198000*100):.1f}%;height:100%;background:#22c55e;"></div>
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
