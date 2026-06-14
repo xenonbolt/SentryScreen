@@ -282,7 +282,8 @@ async def submit_audit(request: AuditRequest) -> Dict[str, str]:
     append_audit_entry(entry)
     
     # If the UI sent the full article payload, explicitly add it to the Compliance DB
-    if request.article:
+    # ONLY if it was retrieved via Live Web (has a LIVE_ id) to avoid duplicates.
+    if request.article and request.article.get("id", "").startswith("LIVE_"):
         media_retrieval_agent.add_articles([request.article])
         
     return {"status": "recorded", "screening_id": request.screening_id}
