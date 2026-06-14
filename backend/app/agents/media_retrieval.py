@@ -91,8 +91,19 @@ class MediaRetrievalAgent:
         with open(DATASET_FILE, encoding="utf-8") as f:
             data: List[Dict[str, Any]] = json.load(f)
 
-        logger.info(f"[MediaRetrieval] Loaded {len(data)} articles from JSON.")
-        return data
+        # Deduplicate by ID
+        unique_data = []
+        seen = set()
+        for item in data:
+            if item["id"] not in seen:
+                seen.add(item["id"])
+                unique_data.append(item)
+
+        if len(unique_data) < len(data):
+            logger.info(f"[MediaRetrieval] Deduplicated {len(data) - len(unique_data)} articles from JSON.")
+
+        logger.info(f"[MediaRetrieval] Loaded {len(unique_data)} unique articles from JSON.")
+        return unique_data
 
     def _sync_chroma_index(self) -> None:
         """Sync loaded articles with ChromaDB embeddings."""
