@@ -132,7 +132,7 @@ class MediaRetrievalAgent:
         aliases: List[str],
         top_k: int = TOP_K_RESULTS,
         threshold: float = RELEVANCE_THRESHOLD,
-        use_live_web: bool = False,
+        use_live_web: bool = False, search_engine: str = "duckduckgo",
     ) -> List[Tuple[Dict[str, Any], float]]:
         """
         Find the top-K articles most semantically similar to the entity query.
@@ -151,7 +151,7 @@ class MediaRetrievalAgent:
             self.initialize()
 
         if use_live_web:
-            return self._retrieve_live_web(query_name, aliases, top_k, threshold)
+            return self._retrieve_live_web(query_name, aliases, top_k, threshold, search_engine)
 
         # Compose a rich query string from the entity name and its aliases
         query_parts = [query_name] + aliases[:4]
@@ -218,7 +218,7 @@ class MediaRetrievalAgent:
     # ── Live Web Scraping ──────────────────────────────────────────────────
 
     def _retrieve_live_web(
-        self, query_name: str, aliases: List[str], top_k: int, threshold: float
+        self, query_name: str, aliases: List[str], top_k: int, threshold: float, search_engine: str = "duckduckgo"
     ) -> List[Tuple[Dict[str, Any], float]]:
         """
         Mimics a human analyst Googling an entity in three passes:
@@ -361,71 +361,76 @@ class MediaRetrievalAgent:
             },
         ]
 
-        try:
-            with DDGS() as ddgs:
-                for q in queries:
-                    logger.info(
-                        f"[MediaRetrieval] Query [{q['label']}]: \"{q['ddg_query']}\""
-                    )
-                    try:
-                        if q["search_type"] == "news":
-                            hits = list(ddgs.news(q["ddg_query"], max_results=q["max_results"]))
-                        else:
-                            hits = list(ddgs.text(q["ddg_query"], max_results=q["max_results"]))
-
+        if search_engine.lower() == "duckduckgo":
+            try:
+                with DDGS() as ddgs:
+                    for q in queries:
                         logger.info(
-                            f"[MediaRetrieval]   → {len(hits)} raw hits from DDG [{q['label']}]"
+                            f"[MediaRetrieval] Query [{q['label']}]: \"{q['ddg_query']}\""
                         )
+                        try:
+                            if q["search_type"] == "news":
+                                hits = list(ddgs.news(q["ddg_query"], max_results=q["max_results"]))
+                            else:
+                                hits = list(ddgs.text(q["ddg_query"], max_results=q["max_results"]))
 
-                        fetched_this_query = 0
-                        for r in hits:
-                            url   = r.get("url") or r.get("href", "")
-                            title = r.get("title", "").strip()
-                            body  = r.get("body", "").strip()
+                            logger.info(
+                                f"[MediaRetrieval]   → {len(hits)} raw hits from DDG [{q['label']}]"
+                            )
 
-                            if not title:
-                                continue
-                            if url in seen_urls:
-                                logger.debug(f"[MediaRetrieval] Skipping duplicate URL: {url}")
-                                continue
+                            fetched_this_query = 0
+                            for r in hits:
+                                url   = r.get("url") or r.get("href", "")
+                                title = r.get("title", "").strip()
+                                body  = r.get("body", "").strip()
 
-                            seen_urls.add(url)
+                                if not title:
+                                    continue
+                                if url in seen_urls:
+                                    logger.debug(f"[MediaRetrieval] Skipping duplicate URL: {url}")
+                                    continue
 
-                            # ── Read the full page (mimics human clicking the link) ──
-                            full_text = _read_page(url, body)
-                            if not full_text.strip():
-                                full_text = title  # last resort
+                                seen_urls.add(url)
 
-                            art_id = f"LIVE_{q['label'].upper()}_{len(raw_articles)}"
-                            raw_articles.append({
-                                "id":               art_id,
-                                "entity_name":      query_name,
-                                "article_title":    title,
-                                "article_text":     full_text[:4000],
-                                "source":           url,
-                                "published_date":   _normalise_date(r.get("date")),
-                                "category":         q["category"],
-                                "severity_label":   q["severity_label"],
-                                "country":          r.get("source", "Unknown"),
-                                "is_negative_news": q["is_negative"],
-                                "_query_label":     q["label"],   # internal tag, stripped later
-                            })
-                            fetched_this_query += 1
+                                # ── Read the full page (mimics human clicking the link) ──
+                                full_text = _read_page(url, body)
+                                if not full_text.strip():
+                                    full_text = title  # last resort
 
-                        logger.info(
-                            f"[MediaRetrieval]   → {fetched_this_query} new articles collected "
-                            f"[{q['label']}]"
-                        )
+                                art_id = f"LIVE_{q['label'].upper()}_{len(raw_articles)}"
+                                raw_articles.append({
+                                    "id":               art_id,
+                                    "entity_name":      query_name,
+                                    "article_title":    title,
+                                    "article_text":     full_text[:4000],
+                                    "source":           url,
+                                    "published_date":   _normalise_date(r.get("date")),
+                                    "category":         q["category"],
+                                    "severity_label":   q["severity_label"],
+                                    "country":          r.get("source", "Unknown"),
+                                    "is_negative_news": q["is_negative"],
+                                    "_query_label":     q["label"],   # internal tag, stripped later
+                                })
+                                fetched_this_query += 1
 
-                    except Exception as exc:
-                        logger.warning(
-                            f"[MediaRetrieval] DDG query [{q['label']}] failed: {exc}"
-                        )
+                            logger.info(
+                                f"[MediaRetrieval]   → {fetched_this_query} new articles collected "
+                                f"[{q['label']}]"
+                            )
 
-        except Exception as exc:
-            logger.error(f"[MediaRetrieval] DDGS session error: {exc}")
+                        except Exception as exc:
+                            logger.warning(
+                                f"[MediaRetrieval] DDG query [{q['label']}] failed: {exc}"
+                            )
 
-            logger.info("[MediaRetrieval] Falling back to googlesearch-python...")
+            except Exception as exc:
+                logger.error(f"[MediaRetrieval] DDGS session error: {exc}")
+
+        if search_engine.lower() == "google" or not raw_articles:
+            if not raw_articles and search_engine.lower() == "duckduckgo":
+                logger.info("[MediaRetrieval] DDG yielded 0 hits. Falling back to googlesearch-python...")
+            else:
+                logger.info("[MediaRetrieval] Using googlesearch-python...")
             try:
                 from googlesearch import search as google_search
                 for q in queries:

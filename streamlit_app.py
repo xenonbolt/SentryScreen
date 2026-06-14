@@ -311,9 +311,14 @@ with tab_screen:
         st.markdown("<div style='height:1.8rem'></div>", unsafe_allow_html=True)
         screen_clicked = st.button("EXECUTE SCREENING ➜", type="primary", use_container_width=True)
         
-    chk1, chk2 = st.columns([2, 10])
+    chk1, chk2 = st.columns([3, 9])
     with chk1:
         use_live_web = st.checkbox("🌐 LIVE WEB OSINT", value=True)
+    with chk2:
+        if use_live_web:
+            search_engine = st.radio("Search Engine", ["DuckDuckGo", "Google"], horizontal=True, label_visibility="collapsed")
+        else:
+            search_engine = "DuckDuckGo"
         
     if st.session_state.recent_sessions:
         st.markdown(f"<div style='font-family:\"Fira Code\", monospace;font-size:0.75rem;color:#fca5a5;'>RECENT SESSIONS: <span style='color:#e2e8f0;'>{' | '.join(st.session_state.recent_sessions[-5:])}</span></div>", unsafe_allow_html=True)
@@ -328,7 +333,7 @@ with tab_screen:
             try:
                 res = requests.post(
                     f"{API_BASE}/screen",
-                    json={"entity_name": query.strip(), "top_k": 15, "threshold": 0.0, "use_live_web": use_live_web},
+                    json={"entity_name": query.strip(), "top_k": 15, "threshold": 0.0, "use_live_web": use_live_web, "search_engine": search_engine.lower()},
                     timeout=90,
                 )
                 

@@ -177,6 +177,7 @@ async def screen_entity(request: ScreeningRequest) -> ScreeningResponse:
         top_k=request.top_k,
         threshold=request.threshold,
         use_live_web=request.use_live_web,
+        search_engine=request.search_engine,
     )
     t2 = (time.perf_counter() - s2) * 1000
     logger.info(

@@ -54,6 +54,7 @@ class ScreeningRequest(BaseModel):
         description="Minimum cosine similarity threshold.",
     )
     use_live_web: bool = Field(default=False, description="If True, performs live web scraping via DuckDuckGo")
+    search_engine: str = Field(default="duckduckgo", description="The search engine to use ('duckduckgo' or 'google')")
 
 
 class AuditRequest(BaseModel):

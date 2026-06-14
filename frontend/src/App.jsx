@@ -94,6 +94,7 @@ export default function App() {
   const [entityName, setEntityName] = useState('');
   const [customFocus, setCustomFocus] = useState('');
   const [webSearch, setWebSearch] = useState(true);
+  const [searchEngine, setSearchEngine] = useState('duckduckgo');
   const [loading, setLoading] = useState(false);
   const [activeAgent, setActiveAgent] = useState('');
   const [agentLogs, setAgentLogs] = useState([]);
@@ -261,6 +262,7 @@ export default function App() {
         top_k: 15,
         threshold: 0.0,
         use_live_web: webSearch,
+        search_engine: searchEngine,
       });
       const session = { ...res, _queryInput: entityName.trim(), _ts: Date.now() };
       setHistory(prev => [session, ...prev]);
@@ -478,6 +480,34 @@ export default function App() {
                     <p className="text-[10px] text-slate-500 pl-6 mt-0.5">
                       Fires 3 Google-style DDG queries + reads full article content.
                     </p>
+                    {webSearch && (
+                      <div className="pt-2 pl-6">
+                        <div className="flex items-center gap-4">
+                          <label className="flex items-center gap-2 cursor-pointer text-[11px] text-slate-300">
+                            <input
+                              type="radio"
+                              name="searchEngine"
+                              value="duckduckgo"
+                              checked={searchEngine === 'duckduckgo'}
+                              onChange={() => setSearchEngine('duckduckgo')}
+                              className="w-3 h-3 accent-rose-500"
+                            />
+                            DuckDuckGo
+                          </label>
+                          <label className="flex items-center gap-2 cursor-pointer text-[11px] text-slate-300">
+                            <input
+                              type="radio"
+                              name="searchEngine"
+                              value="google"
+                              checked={searchEngine === 'google'}
+                              onChange={() => setSearchEngine('google')}
+                              className="w-3 h-3 accent-rose-500"
+                            />
+                            Google Search
+                          </label>
+                        </div>
+                      </div>
+                    )}
                   </div>
 
                   {apiError && (
