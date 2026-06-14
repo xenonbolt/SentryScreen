@@ -234,6 +234,7 @@ OLLAMA_MODEL    = os.getenv("OLLAMA_MODEL", "llama3")
 
 # ── Dataset ───────────────────────────────────────────────────────────────────
 DATASET_FILE = DATA_DIR / "synthetic_dataset.json"
+CHROMADB_DIR = DATA_DIR / "chroma"
 
 # ── API ───────────────────────────────────────────────────────────────────────
 API_VERSION = "1.0.0"

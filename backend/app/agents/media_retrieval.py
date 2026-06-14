@@ -26,7 +26,7 @@ from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 
 from app.config import (
-    DATASET_FILE, DEVICE, EMBEDDING_BATCH_SIZE,
+    DATASET_FILE, CHROMADB_DIR, DEVICE, EMBEDDING_BATCH_SIZE,
     EMBEDDING_MODEL, RELEVANCE_THRESHOLD, TOP_K_RESULTS,
 )
 
@@ -41,35 +41,42 @@ _ADVERSE_KEYWORDS = (
 
 class MediaRetrievalAgent:
     """
-    Singleton agent that manages the FAISS vector index.
+    Singleton agent that manages the ChromaDB vector index.
     Call `initialize()` once at application startup.
     """
 
     def __init__(self) -> None:
         self.model = None
-        self.index = None
+        self.chroma_client = None
+        self.collection = None
         self.articles: List[Dict[str, Any]] = []
-        self.embeddings: Optional[np.ndarray] = None
-        self._gpu_index: bool = False
         self._initialized: bool = False
 
     # ── Initialisation ─────────────────────────────────────────────────────
 
     def initialize(self) -> None:
-        """Load model, dataset, and build FAISS index. Idempotent."""
+        """Load model, dataset, and build ChromaDB index. Idempotent."""
         if self._initialized:
             return
+
+        import chromadb
+        logger.info(f"[MediaRetrieval] Initializing ChromaDB at {CHROMADB_DIR}")
+        self.chroma_client = chromadb.PersistentClient(path=str(CHROMADB_DIR))
+        self.collection = self.chroma_client.get_or_create_collection(
+            name="compliance_articles",
+            metadata={"hnsw:space": "cosine"}
+        )
 
         # 1. Load the SentenceTransformer model
         logger.info(f"[MediaRetrieval] Loading '{EMBEDDING_MODEL}' on device='{DEVICE}'")
         from sentence_transformers import SentenceTransformer
         self.model = SentenceTransformer(EMBEDDING_MODEL, device=DEVICE)
 
-        # 2. Load dataset
+        # 2. Load dataset to memory
         self.articles = self._load_dataset()
 
-        # 3. Encode and index
-        self._build_faiss_index()
+        # 3. Encode and index new articles into ChromaDB
+        self._sync_chroma_index()
 
         self._initialized = True
         logger.info("[MediaRetrieval] Initialised — ready for queries.")
@@ -84,45 +91,46 @@ class MediaRetrievalAgent:
         with open(DATASET_FILE, encoding="utf-8") as f:
             data: List[Dict[str, Any]] = json.load(f)
 
-        logger.info(f"[MediaRetrieval] Loaded {len(data)} articles.")
+        logger.info(f"[MediaRetrieval] Loaded {len(data)} articles from JSON.")
         return data
 
-    def _build_faiss_index(self) -> None:
-        """Encode articles and build FAISS flat inner-product index."""
-        import faiss  # imported here to allow graceful fallback
+    def _sync_chroma_index(self) -> None:
+        """Sync loaded articles with ChromaDB embeddings."""
+        existing_data = self.collection.get()
+        existing_ids = set(existing_data["ids"])
+
+        new_articles = [a for a in self.articles if str(a["id"]) not in existing_ids]
+        if not new_articles:
+            logger.info("[MediaRetrieval] ChromaDB is up to date.")
+            return
 
         texts = [
             f"{a['entity_name']} {a['article_title']} {a['article_text'][:400]}"
-            for a in self.articles
+            for a in new_articles
         ]
+        ids = [str(a["id"]) for a in new_articles]
 
         t0 = time.perf_counter()
-        self.embeddings = self.model.encode(
+        embeddings = self.model.encode(
             texts,
             batch_size=EMBEDDING_BATCH_SIZE,
             show_progress_bar=False,
             convert_to_numpy=True,
-            normalize_embeddings=True,   # L2-normalise → IP == cosine
+            normalize_embeddings=True,
         ).astype(np.float32)
         elapsed = time.perf_counter() - t0
         logger.info(
-            f"[MediaRetrieval] Encoded {len(texts)} articles in {elapsed:.2f}s "
-            f"on {DEVICE} | dim={self.embeddings.shape[1]}"
+            f"[MediaRetrieval] Encoded {len(new_articles)} new articles in {elapsed:.2f}s "
+            f"on {DEVICE} | dim={embeddings.shape[1]}"
         )
 
-        dim = self.embeddings.shape[1]
-        cpu_index = faiss.IndexFlatIP(dim)
-        cpu_index.add(self.embeddings)
-
-        # Try to move index to GPU (faiss-gpu / ROCm build)
-        try:
-            res = faiss.StandardGpuResources()
-            self.index = faiss.index_cpu_to_gpu(res, 0, cpu_index)
-            self._gpu_index = True
-            logger.info("[MediaRetrieval] FAISS index moved to GPU.")
-        except Exception:
-            self.index = cpu_index
-            logger.info("[MediaRetrieval] Using CPU FAISS index (faiss-gpu not available).")
+        batch_size = 500
+        for i in range(0, len(ids), batch_size):
+            self.collection.add(
+                embeddings=embeddings[i:i+batch_size].tolist(),
+                ids=ids[i:i+batch_size]
+            )
+        logger.info(f"[MediaRetrieval] Added {len(new_articles)} new articles to ChromaDB.")
 
     # ── Query ──────────────────────────────────────────────────────────────
 
@@ -162,19 +170,36 @@ class MediaRetrievalAgent:
             [query_text],
             convert_to_numpy=True,
             normalize_embeddings=True,
-        ).astype(np.float32)
+        ).astype(np.float32)[0]
 
         k_search = min(top_k * 4, len(self.articles))
-        scores, indices = self.index.search(q_vec, k_search)
+        if k_search == 0:
+            return []
+            
+        results_chroma = self.collection.query(
+            query_embeddings=[q_vec.tolist()],
+            n_results=k_search
+        )
+        
+        if not results_chroma["ids"] or not results_chroma["ids"][0]:
+            return []
 
+        ids = results_chroma["ids"][0]
+        distances = results_chroma["distances"][0]
+
+        article_map = {str(a["id"]): a for a in self.articles}
         results: List[Tuple[Dict[str, Any], float]] = []
         seen_ids: set[str] = set()
 
-        for score, idx in zip(scores[0].tolist(), indices[0].tolist()):
-            if idx < 0 or score < threshold:
+        for art_id, dist in zip(ids, distances):
+            score = 1.0 - dist
+            if score < threshold:
                 continue
-            article = self.articles[idx]
-            art_id = article.get("id", str(idx))
+            
+            if art_id not in article_map:
+                continue
+
+            article = article_map[art_id]
             if art_id in seen_ids:
                 continue
             seen_ids.add(art_id)
@@ -578,7 +603,7 @@ class MediaRetrievalAgent:
         return results[:top_k]
 
     def add_articles(self, new_articles: List[Dict[str, Any]]):
-        """Append live articles to the synthetic dataset and update FAISS index."""
+        """Append live articles to the synthetic dataset and update ChromaDB."""
         if not new_articles:
             return
             
@@ -588,7 +613,7 @@ class MediaRetrievalAgent:
         # Add to in-memory list
         self.articles.extend(new_articles)
         
-        # Update FAISS
+        # Update ChromaDB
         encode_texts = [f"{a['article_title']} {a['article_text'][:400]}" for a in new_articles]
         new_vecs = self.model.encode(
             encode_texts,
@@ -596,16 +621,20 @@ class MediaRetrievalAgent:
             normalize_embeddings=True,
             show_progress_bar=False,
         ).astype(np.float32)
-        self.index.add(new_vecs)
+        
+        self.collection.add(
+            embeddings=new_vecs.tolist(),
+            ids=[str(a["id"]) for a in new_articles]
+        )
         
         # Append to json
         try:
-            with open(DATASET_FILE, "r") as f:
+            with open(DATASET_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
             data.extend(new_articles)
-            with open(DATASET_FILE, "w") as f:
-                json.dump(data, f, indent=2)
-            logger.info(f"[MediaRetrieval] Appended {len(new_articles)} live articles to dataset. FAISS updated.")
+            with open(DATASET_FILE, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            logger.info(f"[MediaRetrieval] Appended {len(new_articles)} live articles to dataset. ChromaDB updated.")
         except Exception as e:
             logger.error(f"[MediaRetrieval] Failed to persist new articles: {e}")
 

@@ -1138,7 +1138,7 @@ export default function App() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {dbArticles.map((item, i) => (
-                <div key={item.id || i} className="bg-slate-900/60 border border-slate-800/80 p-4 rounded-lg flex flex-col justify-between hover:border-slate-700 transition-all gap-3">
+                <div key={item.id || i} onClick={() => setAuditModalArticle(item)} className="cursor-pointer bg-slate-900/60 border border-slate-800/80 p-4 rounded-lg flex flex-col justify-between hover:border-slate-700 hover:bg-slate-800/50 transition-all gap-3">
                   <div>
                     <div className="flex justify-between items-start">
                       <div>
